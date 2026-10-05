@@ -322,6 +322,43 @@ $('stakes').onclick = openSettings;
 
 // ---------- Совет ----------
 let adviceTimer = 0;
+let lastAdvice = null;
+
+const cardText = (c) => `${rankLabel(rankOf(c))}${SUIT_GLYPH[suitOf(c)]}`;
+
+// «Не согласен»: раздача текстом — владелец вставляет её мне в чат, я разбираю пачкой.
+// Последняя строка #data — для повтора раздачи скриптом scripts/replay.mjs.
+async function copyHand() {
+  const pos = seatPosition(state.occupied, state.button, state.hero);
+  const board = state.board.filter((c) => c !== null);
+  const pre = PREFLOP_CHOICES.find(([k]) => k === state.preflop)[1];
+  const a = lastAdvice;
+  const text = [
+    'Раздача для разбора (Покер · совет)',
+    `Стол: ${activeCount()} игроков, кнопка у места ${state.button}, я на месте ${state.hero} (${pos ? pos.name : '?'})`,
+    `Блайнды ${fmt(state.bb / 2)}/${fmt(state.bb)}, мой стек ${state.stack ? fmt(state.stack) : 'не указан'}`,
+    `Мои карты: ${state.hole.map(cardText).join(' ')}`,
+    board.length ? `На столе: ${board.map(cardText).join(' ')}` : 'На столе: ничего (префлоп)',
+    `До меня префлоп: ${pre}${state.preflop === 'limp' ? ` (${state.limpers})` : ''}${state.raiseTo && /raise|3bet/.test(state.preflop) ? ` до ${fmt(state.raiseTo)}` : ''}`,
+    board.length ? `Банк ${fmt(state.pot)}, соперник поставил ${fmt(state.toCall)}, соперников ${state.opponents}, блефует: ${{ rare: 'редко', normal: 'обычно', often: 'часто' }[state.style]}` : '',
+    a ? `Совет приложения: ${a.title} · шанс ${percentText(a.equity)} % — ${a.advice.reason}` : '',
+    'Я думаю: ',
+    `#data ${JSON.stringify({ occupied: state.occupied, hero: state.hero, button: state.button, bb: state.bb, stack: state.stack,
+      hole: state.hole, board: state.board, preflop: state.preflop, limpers: state.limpers, raiseTo: state.raiseTo,
+      pot: state.pot, toCall: state.toCall, opponents: state.opponents, style: state.style })}`,
+  ].filter(Boolean).join('\n');
+  try {
+    await navigator.clipboard.writeText(text);
+    $('disagree').textContent = 'Скопировано — вставь в чат с Claude и допиши, что думаешь';
+  } catch {
+    // Если телефон не дал скопировать — показываем текст, его можно выделить вручную.
+    openSheet(`<h2>Раздача<button data-act="close">Закрыть</button></h2>
+      <textarea class="copy-box" readonly>${text.replace(/</g, '&lt;')}</textarea>
+      <p class="note">Выдели весь текст и скопируй, потом вставь в чат с Claude.</p>`);
+    sheet.querySelector('[data-act="close"]').onclick = closeSheet;
+    sheet.querySelector('textarea').select();
+  }
+}
 function renderTicket() {
   const ticket = $('ticket');
   const heroPos = seatPosition(state.occupied, state.button, state.hero);
@@ -374,10 +411,13 @@ function renderTicket() {
     ticket.classList.remove('busy');
     ticket.innerHTML = `
       <div class="top-row">
-        <div class="act ${advice.action === 'fold' ? 'fold' : ''}"><small>Совет${blinds ? ` · ${blinds}` : ''}</small>${title}</div>
+        <div class="act ${advice.action === 'fold' ? 'fold' : ''}"><small>${advice.close ? 'Спорно — почти равно' : 'Совет'}${blinds ? ` · ${blinds}` : ''}</small>${title}</div>
         <div class="gauge"><b>${percentText(equity)}%</b><span>${gaugeNote === 'шанс выиграть' ? gaugeNote : gaugeNote.startsWith('против любых') ? `шанс с учётом ставок<br>${gaugeNote}` : `шанс ${gaugeNote}`}</span></div>
       </div>
-      <hr>${lines.map((l) => `<div class="line">${l}</div>`).join('')}`;
+      <hr>${lines.map((l) => `<div class="line">${l}</div>`).join('')}
+      <button class="disagree" id="disagree">Не согласен — скопировать раздачу</button>`;
+    lastAdvice = { advice, equity, title };
+    $('disagree').onclick = copyHand;
   }, 30);
 }
 

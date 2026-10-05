@@ -136,6 +136,7 @@ export function postflopAdvice({
   const valueNeed = Math.max(0.35, 0.7 - 0.1 * opponents);
   const strongDraw = draws.outs >= 8 && !river;
 
+  let close = false; // спорно: решения почти равны
   const result = (act, amount, reason) => {
     // Больше, чем есть, не поставишь; если ставка — почти весь стек, честнее идти ва-банк.
     if ((act === 'bet' || act === 'raise') && amount >= stack * 0.5) { act = 'allin'; amount = stack; }
@@ -144,11 +145,12 @@ export function postflopAdvice({
       action: act,
       amount: amount ? chips(amount) : 0,
       text: ACTION_TEXT[act] + (amount ? `${act === 'raise' ? ' до' : ''} ${chips(amount)}` : ''),
-      reason, equity, randomEquity, handName, draws, spr,
+      reason, equity, randomEquity, handName, draws, spr, close,
     };
   };
 
   if (!bet) {
+    close = Math.abs(equity - valueNeed) < 0.04;
     if (equity >= valueNeed) {
       if (spr < 1.5 && topPairPlus) {
         return result('allin', stack, `Шанс ${percent} %, а в стеке меньше полутора банков (SPR ${sprText}) — ставь всё сразу.`);
@@ -192,6 +194,7 @@ export function postflopAdvice({
       iterations: Math.round(iterations / 2), random, compareStyles: false });
     return alt.action;
   };
+  close = Math.abs(realized - drawOdds) < 0.04;
   if (realized >= drawOdds) {
     const rare = flip('rare');
     const note = rare === 'fold' ? ' Но если он почти не блефует — пас.' : '';

@@ -162,3 +162,7 @@ h1 em { font-style: normal; color: var(--gold); }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
+
+.disagree { display: block; margin: 6px 0 0 auto; font: 700 11px Manrope; color: var(--gold-ink); padding: 4px 0; }
+.copy-box { width: 100%; height: 220px; border-radius: 12px; background: #0f1a14; color: var(--ivory);
+            border: 1px solid var(--panel-line); padding: 10px; font: 500 12px/1.4 Manrope; }

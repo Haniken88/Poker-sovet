@@ -5,17 +5,21 @@ import { rankOf } from './cards.js';
 import { topClasses, combosIn, PREFLOP_SHARE } from './ranges.js';
 import { calcEquity } from './equity.js';
 
-// Открытие (первым входишь в банк): чем больше игроков после тебя, тем уже диапазон.
+// Открытие (первым входишь в банк) — по опубликованным таблицам солвера для 100 ББ
+// (Preflop Wizard 9-max/6-max, GTO Gecko). Ключ — сколько игроков ходят после тебя:
+// 8 — UTG за полным столом, 5 — UTG за столом на 6, 4 — хайджек, 3 — катофф, 2 — баттон, 1 — МБ.
 const OPEN = {
-  7: '77+, A9s+, KTs+, QTs+, JTs, AJo+, KQo',
-  6: '66+, A8s+, KTs+, QTs+, JTs, T9s, AJo+, KQo',
-  5: '55+, A2s+, KTs+, QTs+, JTs, T9s, 98s, ATo+, KQo',
-  4: '44+, A2s+, K9s+, Q9s+, J9s+, T9s, 98s, 87s, ATo+, KJo+, QJo',
-  3: '22+, A2s+, K7s+, Q8s+, J8s+, T8s+, 97s+, 87s, 76s, 65s, A9o+, KTo+, QTo+, JTo',
-  2: '22+, A2s+, K2s+, Q5s+, J7s+, T7s+, 96s+, 86s+, 75s+, 64s+, 54s, A2o+, K9o+, Q9o+, J9o+, T9o, 98o',
-  1: '22+, A2s+, K5s+, Q7s+, J7s+, T7s+, 97s+, 86s+, 76s, 65s, 54s, A5o+, K9o+, QTo+, JTo',
+  8: '77+, ATs+, KJs+, QJs, JTs, AJo+', // ~9 %
+  7: '66+, A9s+, KTs+, QTs+, JTs, T9s, 98s, AJo+, KQo', // ~12 %
+  6: '55+, A8s+, A5s, KTs+, QTs+, J9s+, T9s, 98s, 87s, ATo+, KQo', // ~15 %
+  5: '22+, A2s+, K9s+, QTs+, JTs, T9s, 98s, 87s, AJo+, KQo', // ~17 %
+  4: '22+, A2s+, K8s+, Q9s+, J9s+, T8s+, 97s+, 87s, 76s, 65s, ATo+, KJo+, QJo', // ~21 %
+  3: '22+, A2s+, K5s+, Q8s+, J8s+, T8s+, 97s+, 86s+, 75s+, 64s+, 54s, A8o+, KTo+, QTo+, JTo', // ~27 %
+  2: '22+, A2s+, K2s+, Q2s+, J4s+, T6s+, 96s+, 85s+, 74s+, 64s+, 53s+, 43s, A2o+, K8o+, Q9o+, J9o+, T9o, 98o', // ~45 %
+  1: '22+, A2s+, K2s+, Q5s+, J7s+, T7s+, 96s+, 86s+, 75s+, 64s+, 54s, A2o+, K9o+, Q9o+, J9o+, T9o', // ~40 %
 };
-const openRange = (behind) => OPEN[Math.min(7, Math.max(1, behind))];
+const openRange = (behind) => OPEN[Math.min(8, Math.max(1, behind))];
+export const OPEN_RANGES = OPEN;
 
 // Против лимперов (кто-то уравнял блайнд без повышения).
 const LIMP_CALL = '22+, A2s+, KTs+, QTs+, JTs, T9s, 98s, 87s, 76s, 65s';
@@ -24,7 +28,6 @@ const LIMP_CALL = '22+, A2s+, KTs+, QTs+, JTs, T9s, 98s, 87s, 76s, 65s';
 const THREEBET = 'QQ+, AKs, AKo';
 const THREEBET_LATE = 'JJ+, AQs+, AKo, A5s';
 const CALL_SMALL = '22-JJ, ATs-AQs, KJs+, QJs, JTs, T9s, 98s, AQo, KQo';
-const CALL_BB_EXTRA = 'A2s+, K9s+, Q9s+, J9s+, T8s+, 97s+, 87s, 76s, 65s, ATo+, KJo+, QJo';
 const CALL_BIG = '77-JJ, AQs, KQs, AQo';
 
 // Спекулятивные руки: дешёвый колл ради большого банка, когда попадёшь (нужны глубокие стеки).
@@ -102,7 +105,11 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
     if (inRange(cls, openRange(position.behind))) {
       return result('raise', 3 * bb, `${cls} достаточно сильна, чтобы входить первым с этой позиции.`);
     }
-    return result('fold', 0, `${cls} слишком слабая для этой позиции: после тебя ещё ${position.behind} игроков.`);
+    // На грани: с соседнего (более позднего) места эту руку уже открывают.
+    const edge = inRange(cls, openRange(position.behind - 1));
+    return { ...result('fold', 0, edge
+      ? `${cls} — на самой границе: с этого места по таблицам пас, а на одно место позже уже открывают.`
+      : `${cls} слишком слабая для этой позиции: после тебя ещё ${position.behind} игроков.`), close: edge };
   }
 
   // Сколько реально доплатить (блайнд уже на столе) и во сколько раз стек больше этой цены.
@@ -113,8 +120,8 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
 
   if (action === 'limp') {
     const raiseSize = (3 + limpers) * bb;
-    // Повышаем, если рука входит в диапазон с запасом (на позицию строже).
-    if (inRange(cls, openRange(position.behind + limpers + 1))) {
+    // Повышаем, если рука входит в диапазон с запасом: каждый лимпер — как два лишних игрока после тебя.
+    if (inRange(cls, openRange(position.behind + 2 * limpers + 1))) {
       return result('raise', raiseSize, `${cls} — сильная рука, повышай и забирай инициативу у лимперов.`);
     }
     if (isBB) return result('check', 0, 'Можно посмотреть флоп бесплатно.');
@@ -162,15 +169,20 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
     if (inRange(cls, SPECULATIVE) && raiseBB <= 4 && (late || isBB) && implied(cost) >= SPECULATIVE_IMPLIED) {
       return result('call', raiseTo, `${cls} — рука «на попадание»: колл дешёвый, стеки глубокие, а флеш или стрит выиграют большой банк.`);
     }
-    // ББ против минимального повышения: цена очень хорошая, защищаем примерно половину рук.
-    if (isBB && raiseBB <= 2.5 && topClasses(0.5).has(cls)) {
-      return result('call', raiseTo, `Повысили минимально: доплатить ${chips(cost)}, а банк уже больше — с ${cls} защищай большой блайнд.`);
+    // Защита ББ по таблицам: чем дешевле повышение, тем больше рук защищаем
+    // (против 2–2,5 ББ около половины, против 3 ББ ~38 %, против 4 ББ ~28 %).
+    const defend = raiseBB <= 2.5 ? 0.5 : raiseBB <= 3.5 ? 0.38 : raiseBB <= 4.5 ? 0.28 : 0.18;
+    if (isBB && topClasses(defend).has(cls)) {
+      return { ...result('call', raiseTo, `Доплатить ${chips(cost)}, часть ставки уже в банке — с ${cls} большой блайнд защищают.`),
+        close: !topClasses(defend - 0.06).has(cls) };
     }
+    const bbEdge = isBB && topClasses(defend + 0.06).has(cls);
     const callRange = raiseBB > 4.5 ? CALL_BIG : CALL_SMALL;
-    if ((inRange(cls, callRange) && !isPair) || (isBB && raiseBB <= 3.5 && inRange(cls, CALL_BB_EXTRA))) {
-      return result('call', raiseTo, isBB
-        ? `${cls}: часть ставки уже в банке, цена колла хорошая.`
-        : `${cls} неплохо играет против повышения, но для 3-бета слабовата.`);
+    if (inRange(cls, callRange) && !isPair) {
+      return result('call', raiseTo, `${cls} неплохо играет против повышения, но для 3-бета слабовата.`);
+    }
+    if (bbEdge) {
+      return { ...result('fold', 0, `${cls} на границе защиты большого блайнда: по таблицам чаще пас, но колл — небольшая ошибка.`), close: true };
     }
     return result('fold', 0, `Против повышения ${cls} слишком слабая.`);
   }
