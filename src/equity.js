@@ -6,9 +6,10 @@ import { evaluate } from './evaluator.js';
  * hero — 2 карты игрока, board — 0–5 общих карт,
  * opponents — сколько соперников с неизвестными картами,
  * known — массив известных рук соперников (для разборов и тестов),
- * iterations — сколько раздач сыграть, random — свой генератор (для тестов),
- * accept(a, b) — какие руки соперник правдоподобно держит (по его действиям);
- *   неподходящую руку пересдаём до 30 раз.
+ * ranges — для каждого неизвестного соперника его возможные руки (или null = любые):
+ *   { groups: [[[a, b], ...], ...], weights: [0.7, 0.3] } — сначала по весу выбираем
+ *   группу (например «сильные руки» или «блеф»), потом случайную руку из неё;
+ * iterations — сколько раздач сыграть, random — свой генератор (для тестов).
  * Возвращает { win, tie, equity } в долях от 1.
  */
 export function calcEquity({
@@ -16,9 +17,9 @@ export function calcEquity({
   board = [],
   opponents = 1,
   known = [],
+  ranges = null,
   iterations = 10000,
   random = Math.random,
-  accept = null,
 }) {
   const used = new Set([...hero, ...board, ...known.flat()]);
   if (used.size !== hero.length + board.length + known.flat().length) {
@@ -28,56 +29,69 @@ export function calcEquity({
   for (let card = 0; card < 52; card++) if (!used.has(card)) deck.push(card);
 
   const missingBoard = 5 - board.length;
-  const need = missingBoard + opponents * 2;
-  if (need > deck.length) throw new Error('Слишком много игроков для одной колоды');
+  if (missingBoard + opponents * 2 > deck.length) throw new Error('Слишком много игроков для одной колоды');
 
   const heroHand = [...hero, ...board, 0, 0, 0, 0, 0].slice(0, 7);
   const villainHand = [0, 0, ...board, 0, 0, 0, 0, 0].slice(0, 7);
   const boardStart = 2 + board.length;
+  const villainCards = new Array(opponents * 2);
+  const taken = new Uint8Array(52);
+  const size = deck.length;
+
+  // Руки из диапазонов: только без карт героя и стола.
+  const specs = Array.from({ length: opponents }, (_, p) => {
+    const range = ranges?.[p];
+    if (!range) return null;
+    const groups = range.groups.map((g) => g.filter(([a, b]) => !used.has(a) && !used.has(b)));
+    const weights = range.weights.map((w, i) => (groups[i].length ? w : 0));
+    const total = weights.reduce((x, y) => x + y, 0);
+    return total ? { groups, weights: weights.map((w) => w / total) } : null;
+  });
+
+  const freeCard = () => {
+    for (;;) {
+      const c = deck[Math.floor(random() * size)];
+      if (!taken[c]) { taken[c] = 1; return c; }
+    }
+  };
 
   let wins = 0, ties = 0, share = 0;
 
   for (let round = 0; round < iterations; round++) {
-    // Частичная перетасовка: в начало колоды встают ровно нужные карты —
-    // сначала руки соперников (по 2 карты), потом недостающие общие карты.
-    const size = deck.length;
+    taken.fill(0);
     for (let p = 0; p < opponents; p++) {
-      const at = p * 2;
-      for (let tries = 0; ; tries++) {
-        const i = at + Math.floor(random() * (size - at));
-        let j = at + Math.floor(random() * (size - at - 1));
-        if (j >= i) j++;
-        if (!accept || tries >= 30 || accept(deck[i], deck[j])) {
-          let t = deck[at]; deck[at] = deck[i]; deck[i] = t;
-          if (j === at) j = i;
-          t = deck[at + 1]; deck[at + 1] = deck[j]; deck[j] = t;
-          break;
+      const spec = specs[p];
+      let a = -1, b = -1;
+      if (spec) {
+        let roll = random(), g = 0;
+        while (g < spec.weights.length - 1 && roll >= spec.weights[g]) roll -= spec.weights[g++];
+        const group = spec.groups[g];
+        for (let tries = 0; tries < 40; tries++) {
+          const [x, y] = group[Math.floor(random() * group.length)];
+          if (!taken[x] && !taken[y]) { a = x; b = y; break; }
         }
       }
+      if (a < 0) { a = freeCard(); b = freeCard(); } else { taken[a] = 1; taken[b] = 1; }
+      villainCards[p * 2] = a; villainCards[p * 2 + 1] = b;
     }
-    const boardFrom = opponents * 2;
     for (let i = 0; i < missingBoard; i++) {
-      const j = boardFrom + i + Math.floor(random() * (size - boardFrom - i));
-      const t = deck[boardFrom + i]; deck[boardFrom + i] = deck[j]; deck[j] = t;
-      heroHand[boardStart + i] = villainHand[boardStart + i] = deck[boardFrom + i];
+      heroHand[boardStart + i] = villainHand[boardStart + i] = freeCard();
     }
     const heroValue = evaluate(heroHand);
 
-    let best = 0, tied = 0, lost = false;
-    const check = (value) => {
-      if (value > heroValue) lost = true;
-      else if (value === heroValue) tied++;
-      if (value > best) best = value;
-    };
+    let tied = 0, lost = false;
     for (const hand of known) {
       villainHand[0] = hand[0]; villainHand[1] = hand[1];
-      check(evaluate(villainHand));
-      if (lost) break;
+      const value = evaluate(villainHand);
+      if (value > heroValue) { lost = true; break; }
+      if (value === heroValue) tied++;
     }
     for (let p = 0; p < opponents && !lost; p++) {
-      villainHand[0] = deck[p * 2];
-      villainHand[1] = deck[p * 2 + 1];
-      check(evaluate(villainHand));
+      villainHand[0] = villainCards[p * 2];
+      villainHand[1] = villainCards[p * 2 + 1];
+      const value = evaluate(villainHand);
+      if (value > heroValue) lost = true;
+      else if (value === heroValue) tied++;
     }
 
     if (lost) continue;

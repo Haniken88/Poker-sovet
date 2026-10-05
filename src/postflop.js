@@ -2,8 +2,7 @@
 import { rankOf, suitOf } from './cards.js';
 import { evaluate, categoryOf, handName as comboName, CATEGORY } from './evaluator.js';
 import { calcEquity } from './equity.js';
-import { handClass } from './hands.js';
-import { HAND_RANKS } from './handRanks.js';
+import { opponentRanges } from './ranges.js';
 import { ACTION_TEXT } from './preflop.js';
 
 const RANK_NAMES = {
@@ -67,53 +66,6 @@ export function findDraws(hero, board) {
   return { names, outs };
 }
 
-// Правдоподобные руки соперников: префлоп-диапазон (по тому, был ли рейз),
-// а если сейчас ставят — ещё и «что-то есть» на этом столе.
-const topClasses = (share) => {
-  const result = new Set();
-  let combos = 0;
-  for (const cls of HAND_RANKS) {
-    if (combos / 1326 >= share) break;
-    result.add(cls);
-    combos += cls.length === 2 ? 6 : cls.endsWith('s') ? 4 : 12;
-  }
-  return result;
-};
-const PREFLOP_SHARE = { none: 0.6, limp: 0.6, raise: 0.25, '3bet': 0.08 };
-
-function hasSomething(a, b, board) {
-  const ranks = board.map(rankOf);
-  const ra = rankOf(a), rb = rankOf(b);
-  if (ra === rb || ranks.includes(ra) || ranks.includes(rb)) return true; // пара и лучше
-  if (board.length === 5) return categoryOf(evaluate([a, b, ...board])) >= CATEGORY.STRAIGHT;
-  const suits = [0, 0, 0, 0];
-  [a, b, ...board].forEach((c) => suits[suitOf(c)]++);
-  if (suits[suitOf(a)] >= 4 || suits[suitOf(b)] >= 4) return true; // флеш-дро
-  // Стрит-дро: 4 из 5 подряд с участием своей карты.
-  let mask = 0;
-  for (const r of [ra, rb, ...ranks]) mask |= 1 << r;
-  if (mask & (1 << 14)) mask |= 2;
-  for (let low = 1; low <= 10; low++) {
-    const window = (mask >> low) & 0b11111;
-    const mine = ((1 << ra) | (1 << rb) | (ra === 14 || rb === 14 ? 2 : 0)) >> low & 0b11111;
-    if (mine && popcount(window) >= 4) return true;
-  }
-  return categoryOf(evaluate([a, b, ...board])) >= CATEGORY.STRAIGHT;
-}
-const popcount = (n) => { let c = 0; while (n) { c += n & 1; n >>= 1; } return c; };
-
-export function villainFilter({ board, preflopAction = 'none', facingBet = false }) {
-  const range = topClasses(PREFLOP_SHARE[preflopAction] ?? 0.6);
-  const table = new Uint8Array(52 * 52);
-  for (let a = 0; a < 52; a++) {
-    for (let b = 0; b < 52; b++) {
-      if (a === b) continue;
-      table[a * 52 + b] = range.has(handClass(a, b)) && (!facingBet || hasSomething(a, b, board)) ? 1 : 0;
-    }
-  }
-  return (a, b) => table[a * 52 + b] === 1;
-}
-
 const chips = (amount) => Math.round(amount * 10) / 10;
 
 // Процент для людей: у краёв с десятыми (99,7 % — не то же самое, что 100 %).
@@ -147,19 +99,21 @@ export function whoBeatsYou(hero, board) {
 
 /**
  * hero — 2 карты, board — 3–5 карт, opponents — сколько соперников ещё в раздаче,
- * pot — банк ДО твоего хода (со ставками соперников на этой улице),
- * toCall — сколько тебе доставить (0 = ставок не было),
- * preflopAction — что было префлоп ('none'/'limp'/'raise'/'3bet').
- * Возвращает { action, amount, text, reason, equity, handName, draws }.
+ * pot — банк в центре стола (без ставок этой улицы),
+ * toCall — сколько поставил соперник на этой улице (0 = ставок не было),
+ * preflopAction — что было префлоп ('none'/'limp'/'raise'/'3bet'),
+ * stack — сколько у тебя осталось денег (Infinity = не важно).
+ * Возвращает { action, amount, text, reason, equity, randomEquity, handName, draws }.
  */
 export function postflopAdvice({
-  hero, board, opponents = 1, pot, toCall = 0, preflopAction = 'none',
+  hero, board, opponents = 1, pot, toCall = 0, preflopAction = 'none', stack = Infinity,
   iterations = 8000, random = Math.random,
 }) {
   if (board.length < 3 || board.length > 5) throw new Error('На столе должно быть 3, 4 или 5 карт');
-  const facingBet = toCall > 0;
-  const accept = villainFilter({ board, preflopAction, facingBet });
-  const { equity } = calcEquity({ hero, board, opponents, iterations, random, accept });
+  const bet = toCall;
+  const { ranges, value } = opponentRanges({ board, opponents, preflopAction, bet, potBefore: pot });
+  const { equity } = calcEquity({ hero, board, opponents, ranges, iterations, random });
+  const randomEquity = calcEquity({ hero, board, opponents, iterations: Math.round(iterations / 3), random }).equity;
   const handName = describeHand(hero, board);
   const draws = findDraws(hero, board);
   const percent = percentText(equity);
@@ -169,33 +123,48 @@ export function postflopAdvice({
   const valueNeed = Math.max(0.35, 0.7 - 0.1 * opponents);
   const strongDraw = draws.outs >= 8 && !river;
 
-  const result = (act, amount, reason) => ({
-    action: act,
-    amount: amount ? chips(amount) : 0,
-    text: ACTION_TEXT[act] + (amount ? `${act === 'raise' ? ' до' : ''} ${chips(amount)}` : ''),
-    reason,
-    equity,
-    handName,
-    draws,
-  });
+  const result = (act, amount, reason) => {
+    // Больше, чем есть, не поставишь; если ставка — почти весь стек, честнее идти ва-банк.
+    if ((act === 'bet' || act === 'raise') && amount >= stack * 0.5) { act = 'allin'; amount = stack; }
+    if (act === 'call' && amount >= stack) { act = 'allin'; amount = stack; }
+    return {
+      action: act,
+      amount: amount ? chips(amount) : 0,
+      text: ACTION_TEXT[act] + (amount ? `${act === 'raise' ? ' до' : ''} ${chips(amount)}` : ''),
+      reason, equity, randomEquity, handName, draws,
+    };
+  };
 
-  if (!facingBet) {
+  if (!bet) {
     if (equity >= valueNeed) {
       return result('bet', pot * 0.66, `Шанс ${percent} % — ты, скорее всего, впереди: ставь 2/3 банка, пусть платят худшие руки.`);
     }
     if (strongDraw && opponents <= 2) {
-      return result('bet', pot * 0.5, `Сильное дро (${draws.outs} аутов): полубанка — можешь забрать банк сразу или доехать.`);
+      return result('bet', pot * 0.5, `Сильное дро (${draws.outs} аутов): полбанка — можешь забрать банк сразу или доехать.`);
     }
     return result('check', 0, `Шанс ${percent} % — для ставки маловато, бесплатная карта тоже хорошо.`);
   }
 
-  const potOdds = toCall / (pot + toCall);
+  const price = Math.min(bet, stack);
+  const potOdds = price / (pot + bet + price);
   const need = Math.round(potOdds * 100);
-  if (equity >= Math.max(valueNeed + 0.1, potOdds + 0.15)) {
-    return result('raise', toCall * 3, `Шанс ${percent} % даже против рук, которые так ставят, — повышай втрое.`);
+  // Повышаем, только если впереди даже против рук, которыми ставят «по делу» (без блефов).
+  const vsValue = calcEquity({ hero, board, opponents, ranges: value ? [...value, ...ranges.slice(1)] : ranges,
+    iterations: Math.round(iterations / 2), random }).equity;
+  if (vsValue >= Math.max(valueNeed, 0.55) && price < stack) {
+    return result('raise', bet * 3, `Ты впереди даже против рук, которыми так ставят без блефа (${percentText(vsValue)} %), — повышай втрое.`);
   }
-  if (equity >= potOdds) {
-    return result('call', toCall, `Шанс ${percent} %, а колл требует ${need} % — уравнивать выгодно.`);
+  // На флопе впереди ещё ставки: дро без готовой пары реализует шанс не полностью
+  // (на тёрне снова придётся платить). При ва-банке ставок больше не будет — без поправки.
+  const madeHand = categoryOf(evaluate([...hero, ...board])) >= CATEGORY.PAIR && !describeHand(hero, board).includes('на столе');
+  const realized = board.length === 3 && !madeHand && price < stack ? equity * 0.8 : equity;
+  if (realized >= potOdds) {
+    const bluffNote = river && categoryOf(evaluate([...hero, ...board])) >= CATEGORY.PAIR
+      ? ' Часть таких ставок — блеф, его ты бьёшь.' : '';
+    return result('call', price, `Шанс ${percent} %, а колл требует ${need} % — уравнивать выгодно.${bluffNote}`);
+  }
+  if (realized < equity && equity >= potOdds) {
+    return result('fold', 0, `Шанс ${percent} %, но это до ривера, а на тёрне снова придётся платить: дро стоит около ${percentText(realized)} %, колл требует ${need} %.`);
   }
   return result('fold', 0, `Шанс ${percent} %, а колл требует ${need} % — в долгую это убыточно.`);
 }

@@ -1,8 +1,7 @@
 // Экран приложения: стол, выбор карт, ставки и совет.
 import { makeCard, rankOf, suitOf } from './src/cards.js';
-import { preflopAdvice } from './src/preflop.js';
+import { preflopAdvice, preflopEquity } from './src/preflop.js';
 import { postflopAdvice, whoBeatsYou, percentText } from './src/postflop.js';
-import { calcEquity } from './src/equity.js';
 import { handClass } from './src/hands.js';
 import { GEOMETRY, DEALER_XY, SEAT_XY, SEAT_COUNT, activeSeats, seatPosition, nextActive } from './src/table.js';
 
@@ -22,6 +21,7 @@ const state = {
   hero: saved.hero || 5,
   button: saved.button || 2,
   bb: saved.bb || 2,
+  stack: saved.stack || 0, // 0 — не указан
   hole: [null, null],
   board: [null, null, null, null, null],
   preflop: 'none', limpers: 1, raiseTo: 0,
@@ -30,13 +30,14 @@ const state = {
 const persist = () => {
   try {
     localStorage.setItem('poker-table', JSON.stringify(
-      { occupied: state.occupied, hero: state.hero, button: state.button, bb: state.bb }));
+      { occupied: state.occupied, hero: state.hero, button: state.button, bb: state.bb, stack: state.stack }));
   } catch { /* приватный режим — просто не запоминаем */ }
 };
 
 const boardCount = () => state.board.filter((c) => c !== null).length;
 const usedCards = (except) => [...state.hole, ...state.board].filter((c, i) => c !== null && i !== except);
 const activeCount = () => activeSeats(state.occupied).length;
+const stackOrInf = () => (state.stack > 0 ? state.stack : Infinity);
 
 // ---------- Карты ----------
 function cardHtml(card, extra = '') {
@@ -107,7 +108,10 @@ function renderTable() {
   for (const b of $('board').querySelectorAll('button')) {
     b.addEventListener('click', () => openPicker('board', Number(b.dataset.board)));
   }
-  $('pot-chip').innerHTML = count && state.pot ? `Банк <b>${fmt(state.pot)}</b>` : '';
+  const potChip = $('pot-chip');
+  potChip.classList.toggle('ask', count >= 3 && !state.pot);
+  potChip.innerHTML = count < 3 ? '' : state.pot ? `Банк <b>${fmt(state.pot)}</b> ✎` : 'Банк: нажми, введи сумму';
+  renderStakes();
   $('street').textContent = STREET[count] || 'Флоп';
 }
 
@@ -240,22 +244,29 @@ const fmt = (n) => String(Math.round(n * 10) / 10).replace('.', ',');
 const parseNum = (s) => { const n = parseFloat(String(s).replace(',', '.')); return Number.isFinite(n) && n >= 0 ? n : 0; };
 
 function stepper(key, name, step, min = 0, max = 100000) {
-  const blinds = ['raiseTo', 'pot', 'toCall'].includes(key) && state[key] ? ` · ${inBlinds(state[key])}` : '';
-  return `<label class="stepper"><span class="name">${name}${blinds}</span>
+  return `<label class="stepper"><span class="name">${name}</span>
     <input class="value" inputmode="decimal" data-key="${key}" value="${fmt(state[key])}" aria-label="${name}">
     <span class="btns"><button type="button" data-key="${key}" data-step="${-step}" data-min="${min}" data-max="${max}" aria-label="Меньше">−</button><button type="button" data-key="${key}" data-step="${step}" data-min="${min}" data-max="${max}" aria-label="Больше">+</button></span></label>`;
 }
+
+const PREFLOP_CHOICES = [
+  ['none', 'Никто', 'Все до тебя <b>сбросили карты</b> — ты входишь первым (блайнды не в счёт).'],
+  ['limp', 'Уравняли', 'Кто-то <b>просто уравнял</b> большой блайнд, не повышая (лимп).'],
+  ['raise', 'Повысили', 'Кто-то <b>повысил</b> ставку (рейз).'],
+  ['3bet', 'Повысили ×2', 'Повысили, а потом <b>повысили ещё раз</b> (3-бет).'],
+];
 
 function renderInputs() {
   const box = $('inputs');
   const preflop = boardCount() < 3;
   const others = Math.max(1, activeCount() - 1);
   if (preflop) {
-    const segs = [['none', 'Все пас'], ['limp', 'Лимп'], ['raise', 'Рейз'], ['3bet', '3-бет']];
+    const current = PREFLOP_CHOICES.find(([k]) => k === state.preflop);
     box.innerHTML = `
-      <div><div class="label">Что было до тебя</div>
-        <div class="segments">${segs.map(([k, t]) => `<button data-pre="${k}" aria-pressed="${state.preflop === k}">${t}</button>`).join('')}</div></div>
-      ${state.preflop === 'limp' ? `<div class="steppers">${stepper('limpers', 'Сколько уравняли блайнд', 1, 1, others)}</div>` : ''}
+      <div><div class="label">Что сделали игроки до тебя</div>
+        <div class="segments">${PREFLOP_CHOICES.map(([k, t]) => `<button data-pre="${k}" aria-pressed="${state.preflop === k}">${t}</button>`).join('')}</div>
+        <div class="explain">${current[2]}</div></div>
+      ${state.preflop === 'limp' ? `<div class="steppers">${stepper('limpers', 'Сколько игроков уравняли', 1, 1, others)}</div>` : ''}
       ${state.preflop === 'raise' || state.preflop === '3bet' ? `<div class="steppers">${stepper('raiseTo', 'Повысили до', state.bb, state.bb)}</div>` : ''}`;
     for (const b of box.querySelectorAll('[data-pre]')) b.onclick = () => {
       state.preflop = b.dataset.pre;
@@ -265,20 +276,43 @@ function renderInputs() {
     };
   } else {
     box.innerHTML = `<div class="steppers">
-      ${stepper('pot', 'Банк (со ставками)', state.bb)}
-      ${stepper('toCall', 'Тебе доставить (0 — чек)', state.bb)}
+      ${stepper('toCall', 'Соперник поставил', state.bb)}
       ${stepper('opponents', 'Соперников в игре', 1, 1, others)}</div>`;
   }
+  bindSteppers(box);
+}
+
+function bindSteppers(box) {
   for (const b of box.querySelectorAll('button[data-step]')) b.onclick = () => {
     const key = b.dataset.key;
     state[key] = Math.min(Number(b.dataset.max), Math.max(Number(b.dataset.min), state[key] + Number(b.dataset.step)));
+    if (box === sheet) { box.querySelector(`input[data-key="${key}"]`).value = fmt(state[key]); persist(); }
     render();
   };
   for (const input of box.querySelectorAll('input[data-key]')) {
-    input.onchange = () => { state[input.dataset.key] = parseNum(input.value); render(); };
+    input.onchange = () => { state[input.dataset.key] = parseNum(input.value); if (box === sheet) persist(); render(); };
     input.onfocus = () => input.select();
   }
 }
+
+// Банк — нажатием на стол.
+$('pot-chip').onclick = () => {
+  openSheet(`
+    <h2>Банк<button data-act="close">Готово</button></h2>
+    <div class="steppers">${stepper('pot', 'Деньги в центре стола', state.bb)}</div>
+    <p class="note">Только то, что уже в центре. Ставку соперника на этой улице вводи отдельно — «Соперник поставил».</p>`);
+  sheet.querySelector('[data-act="close"]').onclick = closeSheet;
+  bindSteppers(sheet);
+};
+
+// Блайнды и стек — строка вверху.
+function renderStakes() {
+  const sb = fmt(state.bb / 2), bb = fmt(state.bb);
+  $('stakes').innerHTML = `Блайнды <b>${sb}/${bb}</b> · Твой стек ${state.stack
+    ? `<b>${fmt(state.stack)}</b> (${fmt(Math.round(state.stack / state.bb))} ББ)`
+    : '<span class="warn">укажи ✎</span>'}`;
+}
+$('stakes').onclick = openSettings;
 
 // ---------- Совет ----------
 let adviceTimer = 0;
@@ -299,7 +333,7 @@ function renderTicket() {
     return;
   }
   if (count >= 3 && !state.pot) {
-    ticket.innerHTML = `<div class="wait">Сколько в банке?<small>Введи банк — без него не посчитать цену колла</small></div>`;
+    ticket.innerHTML = `<div class="wait">Сколько в банке?<small>Нажми «Банк» в центре стола и введи сумму</small></div>`;
     return;
   }
 
@@ -308,30 +342,34 @@ function renderTicket() {
   // Расчёт — доли секунды; даём экрану сначала отрисоваться.
   adviceTimer = setTimeout(() => {
     const hero = state.hole;
-    let advice, equity, lines;
+    let advice, equity, lines, gaugeNote = 'шанс выиграть';
     if (count === 0) {
       advice = preflopAdvice({ hero, position: heroPos, action: state.preflop,
-        limpers: state.limpers, raiseTo: state.raiseTo, bigBlind: state.bb });
-      equity = calcEquity({ hero, opponents: Math.min(activeCount() - 1, 8), iterations: 3000 }).equity;
+        limpers: state.limpers, raiseTo: state.raiseTo, bigBlind: state.bb, stack: stackOrInf() });
+      const pe = preflopEquity({ hero, action: state.preflop, limpers: state.limpers });
+      equity = pe.equity;
+      gaugeNote = pe.label;
       lines = [`<b>${handClass(hero[0], hero[1])}</b> · ${heroPos.name}`, advice.reason];
     } else {
       const board = state.board.filter((c) => c !== null);
       advice = postflopAdvice({ hero, board, opponents: state.opponents, pot: state.pot,
-        toCall: state.toCall, preflopAction: state.preflop, iterations: 6000 });
+        toCall: state.toCall, preflopAction: state.preflop, stack: stackOrInf(), iterations: 6000 });
       equity = advice.equity;
-      const need = state.toCall ? ` · нужно ${Math.round((state.toCall / (state.pot + state.toCall)) * 100)} %` : '';
+      gaugeNote = `против любых рук: ${percentText(advice.randomEquity)} %`;
+      const price = Math.min(state.toCall, stackOrInf());
+      const need = state.toCall ? ` · нужно ${Math.round((price / (state.pot + state.toCall + price)) * 100)} %` : '';
       const draws = advice.draws.names.length ? ` · ${advice.draws.names.join(', ')}, ${advice.draws.outs} аутов` : '';
       lines = [`<b>${advice.handName}</b>${draws}${need}`, advice.reason];
       const danger = dangerLine(hero, board);
       if (danger) lines.push(danger);
     }
-    const { title, chips } = howMuch(advice, count === 0, heroPos);
+    const { title, blinds, chips } = howMuch(advice, count === 0, heroPos);
     if (chips) lines.unshift(chips);
     ticket.classList.remove('busy');
     ticket.innerHTML = `
       <div class="top-row">
-        <div class="act ${advice.action === 'fold' ? 'fold' : ''}"><small>Совет</small>${title}</div>
-        <div class="gauge"><b>${percentText(equity)}%</b><span>шанс выиграть</span></div>
+        <div class="act ${advice.action === 'fold' ? 'fold' : ''}"><small>Совет${blinds ? ` · ${blinds}` : ''}</small>${title}</div>
+        <div class="gauge"><b>${percentText(equity)}%</b><span>${gaugeNote === 'шанс выиграть' ? gaugeNote : gaugeNote.startsWith('против любых') ? `шанс с учётом ставок<br>${gaugeNote}` : `шанс ${gaugeNote}`}</span></div>
       </div>
       <hr>${lines.map((l) => `<div class="line">${l}</div>`).join('')}`;
   }, 30);
@@ -363,26 +401,14 @@ function inBlinds(n) {
 }
 
 function howMuch(advice, preflop, heroPos) {
-  const amount = roundToSB(advice.amount);
+  const amount = advice.action === 'allin' ? advice.amount : roundToSB(advice.amount);
   // Префлоп блайнды уже лежат на столе — их не докладывают второй раз.
   const posted = preflop ? (heroPos.key === 'BB' ? state.bb : heroPos.key === 'SB' ? state.bb / 2 : 0) : 0;
-  const blind = posted ? ` Твой блайнд ${fmt(posted)} уже на столе — доложи <b>${fmt(amount - posted)}</b>.` : '';
-  switch (advice.action) {
-    case 'raise': {
-      const theirs = preflop ? (state.preflop === 'none' ? 0 : state.preflop === 'limp' ? state.bb : state.raiseTo) : state.toCall;
-      return { title: `Рейз: ${fmt(amount)}`,
-        chips: `Ставь ${inBlinds(amount)} — это <b>${fmt(amount)}</b> всего${theirs ? ` (у соперника ${fmt(theirs)})` : ''}.${blind}` };
-    }
-    case 'bet':
-      return { title: `Ставка: ${fmt(amount)}`, chips: `Ставь ${inBlinds(amount)} — это <b>${fmt(amount)}</b>.` };
-    case 'call': {
-      const add = amount - posted;
-      return { title: `Колл: ${fmt(add)}`,
-        chips: `Доложи ${inBlinds(add)} — это <b>${fmt(add)}</b>, столько же, сколько у соперника.${posted ? ` (Твой блайнд ${fmt(posted)} уже на столе.)` : ''}` };
-    }
-    default:
-      return { title: advice.text, chips: '' };
-  }
+  const blindNote = posted && advice.action !== 'fold' && advice.action !== 'check'
+    ? `Твой блайнд ${fmt(posted)} уже на столе — доложи <b>${fmt(amount - posted)}</b>.` : '';
+  const titles = { raise: 'Рейз', bet: 'Ставка', call: 'Колл', allin: 'Ва-банк' };
+  if (!titles[advice.action]) return { title: advice.text, blinds: '', chips: '' };
+  return { title: `${titles[advice.action]}: ${fmt(amount)}`, blinds: `${fmt(Math.round((amount / state.bb) * 10) / 10)} ББ`, chips: blindNote };
 }
 
 // ---------- Твоя рука ----------
@@ -404,20 +430,21 @@ $('new-hand').onclick = () => {
   render();
 };
 
-$('settings-btn').onclick = () => {
+function openSettings() {
   openSheet(`
-    <h2>Блайнды<button data-act="close">Готово</button></h2>
-    <div class="steppers">${stepper('bb', 'Большой блайнд', 1, 1)}</div>
-    <p class="note">Суммы — в деньгах стола (евро, рубли — как у вас), не в штуках фишек. Например, игра 1/2: малый блайнд 1, большой 2. Рейзы, банк и ставки вводи в тех же деньгах.</p>`);
+    <h2>Блайнды и стек<button data-act="close">Готово</button></h2>
+    <div class="steppers">
+      ${stepper('bb', 'Большой блайнд', 1, 1)}
+      ${stepper('stack', 'Твой стек', state.bb * 10)}
+    </div>
+    <p class="note">Суммы — в деньгах стола, не в штуках фишек. Игра 250/500: большой блайнд 500.
+      Стек нужен, чтобы понимать, когда идти ва-банк: с коротким стеком (до 15 ББ) играют «ва-банк или пас»,
+      а большие ставки не превышают твои деньги. Если у соперника денег меньше, чем у тебя, впиши его сумму —
+      играть можно только на неё.</p>`);
   sheet.querySelector('[data-act="close"]').onclick = closeSheet;
-  for (const b of sheet.querySelectorAll('button[data-step]')) b.onclick = () => {
-    state.bb = Math.max(1, state.bb + Number(b.dataset.step));
-    sheet.querySelector('input').value = fmt(state.bb);
-    persist(); render();
-  };
-  const input = sheet.querySelector('input');
-  input.onchange = () => { state.bb = Math.max(0.1, parseNum(input.value) || 1); persist(); render(); };
-};
+  bindSteppers(sheet);
+}
+$('settings-btn').onclick = openSettings;
 
 function render() {
   renderTable();

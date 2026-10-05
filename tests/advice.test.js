@@ -92,9 +92,12 @@ test('постфлоп: сильная рука ставит, слабая не 
 });
 
 test('постфлоп: дро уравнивает только по хорошей цене', () => {
-  // Флеш-дро на флопе ≈ 35 %: маленькая ставка (нужно 20 %) — колл, огромная (нужно 45 %) — пас.
-  assert.equal(post('Js Ts', 'As 7s 2d', { pot: 20, toCall: 5, preflopAction: 'raise' }).action, 'call');
-  assert.equal(post('Js Ts', 'As 7s 2d', { pot: 20, toCall: 30, preflopAction: 'raise' }).action, 'fold');
+  // Банк 20 в центре. Ставка в банк (нужно 33 %) — колл; в три банка (нужно 43 %) — пас:
+  // на тёрне снова придётся платить.
+  assert.equal(post('Js Ts', 'As 7s 2d', { pot: 20, toCall: 20, preflopAction: 'raise' }).action, 'call');
+  assert.equal(post('Js Ts', 'As 7s 2d', { pot: 20, toCall: 60, preflopAction: 'raise' }).action, 'fold');
+  // Тот же ва-банк последними деньгами — уже колл: дальше платить не придётся.
+  assert.equal(post('Js Ts', 'As 7s 2d', { pot: 20, toCall: 60, stack: 60, preflopAction: 'raise' }).action, 'allin');
 });
 
 test('постфлоп: совет приходит быстро', () => {
@@ -127,4 +130,43 @@ test('проценты у краёв — с десятыми', async () => {
   assert.equal(percentText(1), '100');
   assert.equal(percentText(0.003), '0,3');
   assert.equal(percentText(0.5), '50');
+});
+
+// Раздачи владельца, на которых старая модель ошибалась (2026-10-05).
+test('AA на K-K-8-4-2 против большой ставки — колл, а не пас с 32 %', () => {
+  const r = post('Ac Ah', '4d Kc Kd 8s 2c', { pot: 250, toCall: 1000, opponents: 2 });
+  assert.equal(r.action, 'call');
+  assert.ok(r.equity > 0.45 && r.equity < 0.75, `шанс ${r.equity}`);
+});
+
+test('QQ на A-8-8-4-2 против одного — колл; шанс точно не 1 %', () => {
+  const r = post('Qh Qd', '4d Ad 8c 8s 2c', { pot: 750, toCall: 500, opponents: 1 });
+  assert.equal(r.action, 'call');
+  assert.ok(r.equity > 0.3, `шанс ${r.equity}`);
+  assert.ok(r.randomEquity > 0.7, `против случайных ${r.randomEquity}`);
+});
+
+test('префлоп: шанс считается против тех, кто играет, а не против всего стола', async () => {
+  const { preflopEquity } = await import('../src/preflop.js');
+  const random = seededRandom(5);
+  const folded = preflopEquity({ hero: cards('9c 4d'), action: 'none', random });
+  assert.equal(folded.opponents, 1);
+  assert.ok(folded.equity > 0.3, `94o против одного: ${folded.equity}`); // было 6 % «против 8»
+  const vsRaise = preflopEquity({ hero: cards('As Ah'), action: 'raise', random });
+  assert.ok(vsRaise.equity > 0.75, `AA против рейзера: ${vsRaise.equity}`);
+});
+
+test('короткий стек: ва-банк или пас', () => {
+  assert.equal(pre('As 9d', 9, 0, { stack: 16, bigBlind: 2 }).action, 'allin'); // 8 ББ с баттона
+  assert.equal(pre('7s 2d', 9, 0, { stack: 16, bigBlind: 2 }).action, 'fold');
+  assert.equal(pre('Qs Qd', 9, 4, { action: 'raise', raiseTo: 6, stack: 20, bigBlind: 2 }).action, 'allin');
+  assert.equal(pre('Ks Td', 9, 4, { action: 'raise', raiseTo: 6, stack: 20, bigBlind: 2 }).action, 'fold');
+  // Глубокий стек — обычный рейз, не ва-банк.
+  assert.equal(pre('As Ad', 9, 3, { stack: 200, bigBlind: 2 }).action, 'raise');
+});
+
+test('ставка не больше стека: почти весь стек — значит ва-банк', () => {
+  const r = post('As Ad', 'Ah 7c 2d', { pot: 100, stack: 80 });
+  assert.equal(r.action, 'allin');
+  assert.equal(r.amount, 80);
 });

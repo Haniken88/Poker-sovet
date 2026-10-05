@@ -1,6 +1,9 @@
 // Совет префлоп по таблицам стартовых рук.
 // Уровень — крепкая база для обычной игры с живыми соперниками, не солвер.
 import { handClass, parseRange } from './hands.js';
+import { rankOf } from './cards.js';
+import { topClasses, combosIn, PREFLOP_SHARE } from './ranges.js';
+import { calcEquity } from './equity.js';
 
 // Открытие (первым входишь в банк): чем больше игроков после тебя, тем уже диапазон.
 const OPEN = {
@@ -44,18 +47,47 @@ const chips = (amount) => Math.round(amount * 10) / 10;
  * bigBlind — размер большого блайнда (все суммы в тех же деньгах).
  * Возвращает { action, amount, text, reason, hand }.
  */
-export function preflopAdvice({ hero, position, action = 'none', limpers = 0, raiseTo = 0, bigBlind = 1 }) {
+export function preflopAdvice({ hero, position, action = 'none', limpers = 0, raiseTo = 0, bigBlind = 1, stack = Infinity }) {
   const cls = handClass(hero[0], hero[1]);
   const bb = bigBlind;
   const late = position.group === 'late';
   const isBB = position.key === 'BB';
-  const result = (act, amount, reason) => ({
-    action: act,
-    amount: amount ? chips(amount) : 0,
-    text: ACTION_TEXT[act] + (amount ? ` до ${chips(amount)}` : ''),
-    reason,
-    hand: cls,
-  });
+  const result = (act, amount, reason) => {
+    // Если ставка съедает треть стека и больше — честнее сразу ва-банк.
+    if ((act === 'raise' || act === 'call') && amount >= stack * (act === 'raise' ? 0.35 : 1)) {
+      act = 'allin'; amount = stack;
+      reason += ' Стек маленький, поэтому сразу ва-банк.';
+    }
+    return {
+      action: act,
+      amount: amount ? chips(amount) : 0,
+      text: ACTION_TEXT[act] + (amount ? ` до ${chips(amount)}` : ''),
+      reason,
+      hand: cls,
+    };
+  };
+
+  // Короткий стек (15 больших блайндов и меньше): играем «ва-банк или пас».
+  const stackBB = stack / bb;
+  if (stackBB <= 15) {
+    if (action === 'none' || action === 'limp') {
+      if (isBB && action === 'none') return result('check', 0, 'Все сбросили до тебя — ты уже забрал блайнды.');
+      const base = { 1: 0.5, 2: 0.38, 3: 0.26, 4: 0.2, 5: 0.16, 6: 0.13 }[Math.min(position.behind, 7)] ?? 0.11;
+      const share = base * (stackBB > 10 ? 0.7 : 1) * (action === 'limp' ? 0.8 : 1);
+      // Карманные пары с коротким стеком — всегда ва-банк (до 10 ББ любая, до 15 ББ от 55).
+      const pairRank = cls.length === 2 ? hero.map(rankOf)[0] : 0;
+      const pairShove = pairRank && (stackBB <= 10 || pairRank >= 5);
+      if (pairShove || topClasses(share, true).has(cls)) {
+        return result('allin', stack, `Стек всего ${chips(stackBB)} ББ: с ${cls} выгоднее сразу ва-банк — соперники чаще сбросят.`);
+      }
+      return result(isBB ? 'check' : 'fold', 0, `Стек ${chips(stackBB)} ББ — тут играют «ва-банк или пас», а ${cls} для ва-банка слабовата.`);
+    }
+    const share = (action === '3bet' ? 0.04 : 0.07) + (stackBB <= 10 ? 0.04 : 0);
+    if (topClasses(share, true).has(cls)) {
+      return result('allin', stack, `Короткий стек и сильная рука: ${cls} — ва-банк.`);
+    }
+    return result('fold', 0, `Со стеком ${chips(stackBB)} ББ против повышения ${cls} — пас.`);
+  }
 
   if (action === 'none') {
     if (isBB) return result('check', 0, 'Все сбросили до тебя — ты уже забрал блайнды.');
@@ -109,9 +141,28 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
 }
 
 export const ACTION_TEXT = {
+  allin: 'Ва-банк',
   fold: 'Пас',
   check: 'Чек',
   call: 'Колл',
   bet: 'Ставка',
   raise: 'Рейз',
 };
+
+/**
+ * Шанс префлоп против тех, кто реально играет: при «все сбросили» — против одного
+ * (кто-то из блайндов уравняет), при лимпах — против лимперов, при повышении —
+ * против диапазона повысившего. Возвращает { equity, opponents, label }.
+ */
+export function preflopEquity({ hero, action = 'none', limpers = 1, iterations = 3000, random = Math.random }) {
+  if (action === 'raise' || action === '3bet') {
+    const range = combosIn(topClasses(action === '3bet' ? PREFLOP_SHARE.threeBettor : PREFLOP_SHARE.raiser));
+    const { equity } = calcEquity({ hero, opponents: 1, ranges: [{ groups: [range], weights: [1] }], iterations, random });
+    return { equity, opponents: 1, label: 'против руки повысившего' };
+  }
+  const opponents = action === 'limp' ? Math.max(1, limpers) : 1;
+  const open = combosIn(topClasses(PREFLOP_SHARE.open));
+  const ranges = Array.from({ length: opponents }, () => ({ groups: [open], weights: [1] }));
+  const { equity } = calcEquity({ hero, opponents, ranges, iterations, random });
+  return { equity, opponents, label: opponents === 1 ? 'против одного соперника' : `против ${opponents} соперников` };
+}

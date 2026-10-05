@@ -5,9 +5,10 @@
   --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 * { box-sizing: border-box; margin: 0; -webkit-tap-highlight-color: transparent; }
-html { background: var(--bg); }
+html { background: var(--bg); touch-action: manipulation; -webkit-text-size-adjust: 100%; }
+button, input, .seat { touch-action: manipulation; }
 body { background: var(--bg); color: var(--text); font: 500 15px/1.4 Manrope, system-ui, sans-serif;
-       min-height: 100dvh; padding-bottom: calc(200px + var(--safe-bottom)); overscroll-behavior: none; }
+       min-height: 100dvh; padding-bottom: calc(180px + var(--safe-bottom)); overscroll-behavior: none; }
 ::selection { background: var(--gold); color: var(--ink); }
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
 button { padding: 0; }
@@ -39,9 +40,15 @@ h1 em { font-style: normal; color: var(--gold); }
                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E"); }
 .center { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 8px; z-index: 1; pointer-events: none; }
 .board { display: flex; gap: 4px; pointer-events: auto; }
-.pot-chip { font: 700 12px Manrope; color: var(--ivory); background: rgba(0,0,0,.35); padding: 3px 10px; border-radius: 999px; min-height: 22px; }
+.pot-chip { font: 700 13px Manrope; color: var(--ivory); background: rgba(0,0,0,.4); padding: 6px 12px; border-radius: 999px;
+            pointer-events: auto; border: 1px solid rgba(216,178,90,.45); }
 .pot-chip:empty { visibility: hidden; }
 .pot-chip b { color: var(--gold); }
+.pot-chip.ask { color: var(--gold); border-style: dashed; }
+.stakes { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin: 10px 18px 0; width: calc(100% - 36px);
+          font-size: 13px; color: var(--muted); padding: 7px 10px; border-radius: 12px; background: var(--panel); border: 1px solid var(--panel-line); }
+.stakes b { color: var(--ivory); font-weight: 700; }
+.stakes .warn { color: var(--gold); }
 
 .seat { position: absolute; transform: translate(-50%, -50%); z-index: 2; min-width: 46px; padding: 4px 6px 5px;
         border-radius: 10px; text-align: center; background: #18241d; border: 1px solid var(--panel-line);
@@ -50,6 +57,8 @@ h1 em { font-style: normal; color: var(--gold); }
 .seat span { display: block; font: 700 10px Manrope; color: var(--gold); letter-spacing: .08em; min-height: 12px; }
 .seat.is-hero { background: var(--ivory); border-color: var(--gold); }
 .seat.is-hero b { color: var(--ink); } .seat.is-hero span { color: var(--gold-ink); }
+.seat.is-hero::before { content: 'ТЫ'; position: absolute; top: -9px; left: 50%; transform: translateX(-50%); font: 800 9px/1 Manrope;
+                        letter-spacing: .1em; color: var(--ink); background: var(--gold); border-radius: 999px; padding: 3px 6px; }
 .seat.is-out { opacity: .45; border-style: dashed; background: transparent; box-shadow: none; }
 .seat.is-out span { color: var(--muted); font-weight: 500; letter-spacing: 0; }
 .croupier { position: absolute; transform: translate(-50%, -50%); z-index: 2; font: 700 10px Manrope; letter-spacing: .12em;
@@ -90,7 +99,9 @@ h1 em { font-style: normal; color: var(--gold); }
 .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; letter-spacing: .04em; }
 .segments { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; background: var(--panel);
             border: 1px solid var(--panel-line); border-radius: 12px; padding: 3px; }
-.segments button { min-height: 40px; border-radius: 9px; font: 700 13px Manrope; color: var(--muted); }
+.segments button { min-height: 40px; border-radius: 9px; font: 700 12.5px/1.15 Manrope; color: var(--muted); padding: 0 2px; }
+.explain { font-size: 12.5px; color: var(--muted); margin-top: 7px; min-height: 1.4em; }
+.explain b { color: var(--ivory); font-weight: 700; }
 .segments button[aria-pressed="true"] { background: var(--ivory); color: var(--ink); }
 .steppers { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
 .stepper { background: var(--panel); border: 1px solid var(--panel-line); border-radius: 12px; padding: 7px 8px 7px 12px;
@@ -104,20 +115,20 @@ h1 em { font-style: normal; color: var(--gold); }
 .stepper .btns button:active { background: var(--panel-line); }
 
 /* Совет */
-.ticket { position: fixed; left: 12px; right: 12px; bottom: calc(12px + var(--safe-bottom)); z-index: 5;
+.ticket { position: fixed; left: 12px; right: 12px; bottom: calc(10px + var(--safe-bottom)); z-index: 5;
           max-width: 520px; margin: 0 auto; background: var(--ivory); color: var(--ink);
-          border-radius: 16px; padding: 14px 18px; box-shadow: 0 16px 40px rgba(0,0,0,.55); }
+          border-radius: 16px; padding: 10px 16px 11px; box-shadow: 0 16px 40px rgba(0,0,0,.55); }
 .ticket .top-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-.ticket .act { font: 400 34px/1 Prata; }
-.ticket .act small { display: block; font: 700 11px Manrope; letter-spacing: .1em; color: var(--gold-ink); text-transform: uppercase; margin-bottom: 4px; }
+.ticket .act { font: 400 27px/1 Prata; }
+.ticket .act small { display: block; font: 700 10px Manrope; letter-spacing: .1em; color: var(--gold-ink); text-transform: uppercase; margin-bottom: 3px; }
 .ticket .act.fold { color: var(--red); }
 .gauge { text-align: right; flex: none; }
-.gauge b { font: 400 30px/1 Prata; color: var(--felt); }
-.gauge span { display: block; font-size: 11px; color: #6b6150; }
-.ticket hr { border: 0; border-top: 1px dashed #c9bd9d; margin: 10px 0 8px; }
-.ticket .line { font-size: 13px; color: #4a4030; }
+.gauge b { font: 400 25px/1 Prata; color: var(--felt); }
+.gauge span { display: block; font-size: 10.5px; color: #6b6150; line-height: 1.25; }
+.ticket hr { border: 0; border-top: 1px dashed #c9bd9d; margin: 7px 0 5px; }
+.ticket .line { font-size: 12.5px; line-height: 1.35; color: #4a4030; }
 .ticket .line b { color: var(--ink); }
-.ticket .wait { font: 400 20px/1.3 Prata; color: #4a4030; }
+.ticket .wait { font: 400 18px/1.3 Prata; color: #4a4030; }
 .ticket .wait small { display: block; font: 500 13px Manrope; color: #6b6150; margin-top: 2px; }
 .ticket.busy .gauge b { opacity: .4; }
 
