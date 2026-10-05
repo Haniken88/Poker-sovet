@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Вариант C — Трансляция</title>
+<link href="https://fonts.googleapis.com/css2?family=Fira+Sans+Extra+Condensed:ital,wght@0,600;0,800;1,800&family=Fira+Sans:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #111215; --panel: #1b1d22; --line: #2b2e36; --text: #f2f2f0; --muted: #8e919b;
+    --yellow: #ffd400; --s: #f2f2f0; --h: #ff3b3b; --d: #3b8cff; --c: #2fd06a;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 500 15px/1.35 'Fira Sans', system-ui, sans-serif;
+         min-height: 100vh; overflow: hidden; }
+  .cond { font-family: 'Fira Sans Extra Condensed'; }
+  header { display: flex; align-items: stretch; margin: 50px 16px 0; height: 34px; }
+  header .live { background: var(--yellow); color: #111; font: 800 15px/34px 'Fira Sans Extra Condensed';
+                 padding: 0 10px; letter-spacing: .04em; }
+  header .title { background: var(--panel); flex: 1; font: 800 15px/34px 'Fira Sans Extra Condensed';
+                  padding: 0 10px; letter-spacing: .06em; text-transform: uppercase; }
+  header .title span { color: var(--muted); font-weight: 600; margin-left: 6px; }
+  .streets { display: flex; margin: 6px 16px 0; border-bottom: 2px solid var(--line); }
+  .streets div { flex: 1; text-align: center; font: 600 14px 'Fira Sans Extra Condensed'; letter-spacing: .08em;
+                 text-transform: uppercase; color: var(--muted); padding: 8px 0 6px; }
+  .streets .on { color: var(--text); box-shadow: inset 0 -3px 0 var(--yellow); }
+
+  .table-wrap { position: relative; height: 330px; margin: 26px 10px 0; }
+  .oval { position: absolute; inset: 40px 34px; border-radius: 50%; background: #17191d; border: 1px solid var(--line); }
+  .oval::before { content: ''; position: absolute; inset: 14px; border-radius: 50%; border: 1px dashed #2f323a; }
+  .center { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 8px; }
+  .board { display: flex; gap: 4px; }
+  .pot { font: 800 13px 'Fira Sans Extra Condensed'; letter-spacing: .1em; color: var(--muted); }
+  .pot b { color: var(--yellow); font-size: 18px; margin-left: 4px; }
+
+  .seat { position: absolute; transform: translate(-50%, -50%); }
+  .tag { display: flex; height: 26px; box-shadow: 0 4px 10px rgba(0,0,0,.5); }
+  .tag i { font: 800 13px/26px 'Fira Sans Extra Condensed'; font-style: normal; background: var(--yellow); color: #111;
+           padding: 0 6px; min-width: 30px; text-align: center; }
+  .tag b { font: 600 13px/26px 'Fira Sans Extra Condensed'; background: #24272e; padding: 0 7px; white-space: nowrap; }
+  .seat.is-hero .tag { height: 32px; } .seat.is-hero .tag i, .seat.is-hero .tag b { line-height: 32px; font-size: 16px; }
+  .seat.is-hero .tag b { background: var(--text); color: #111; }
+  .seat.is-out .tag { opacity: .45; } .seat.is-out .tag i { background: #3a3d45; color: var(--muted); }
+  .seat.is-out .tag b { text-decoration: line-through; }
+  .dealer { position: absolute; transform: translate(-50%, -50%); width: 24px; height: 24px; border-radius: 50%;
+            background: var(--text); color: #111; font: 800 13px 'Fira Sans Extra Condensed'; display: grid; place-items: center;
+            outline: 2px solid var(--yellow); outline-offset: 2px; }
+
+  .card { width: 32px; height: 44px; border-radius: 4px; display: inline-grid; align-content: center; justify-items: center;
+          line-height: 1; color: #fff; }
+  .card b { font: 800 19px 'Fira Sans Extra Condensed'; } .card i { font-style: normal; font-size: 13px; }
+  .suit-s { background: #3b3f49; } .suit-h { background: #d92b2b; } .suit-d { background: #1f6fe0; } .suit-c { background: #1d9e4f; }
+  .card.empty { background: transparent; border: 1px dashed #3b3f49; }
+  .card.big { width: 50px; height: 70px; border-radius: 6px; } .card.big b { font-size: 30px; } .card.big i { font-size: 18px; }
+
+  .lower { margin: 6px 16px 0; display: grid; grid-template-columns: auto 1fr; background: var(--panel); }
+  .lower .cards { display: flex; gap: 4px; padding: 10px; background: #0c0d0f; }
+  .lower .info { padding: 9px 12px; display: grid; align-content: center; gap: 4px; }
+  .lower .name { font: 800 17px 'Fira Sans Extra Condensed'; text-transform: uppercase; letter-spacing: .03em; }
+  .lower .name span { color: var(--yellow); }
+  .lower .sub { font: 600 14px 'Fira Sans Extra Condensed'; color: var(--muted); }
+  .win { display: flex; align-items: center; gap: 10px; margin: 0 16px; background: #0c0d0f; padding: 8px 12px; }
+  .win .meter { flex: 1; height: 10px; background: #2b2e36; position: relative; }
+  .win .meter div { position: absolute; inset: 0 61% 0 0; background: var(--yellow); }
+  .win .meter em { position: absolute; left: 20%; top: -5px; bottom: -5px; width: 2px; background: #fff; }
+  .win b { font: 800 26px/1 'Fira Sans Extra Condensed'; }
+  .win small { font: 600 12px 'Fira Sans Extra Condensed'; color: var(--muted); letter-spacing: .06em; display: block; }
+
+  .inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 16px 0; }
+  .inputs div { background: var(--panel); padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; }
+  .inputs span { font: 600 13px 'Fira Sans Extra Condensed'; color: var(--muted); letter-spacing: .05em; text-transform: uppercase; }
+  .inputs b { font: 800 22px 'Fira Sans Extra Condensed'; }
+
+  .call { position: absolute; left: 16px; right: 16px; bottom: 28px; display: grid; grid-template-columns: auto 1fr; }
+  .call .act { background: var(--yellow); color: #111; padding: 14px 18px; font: italic 800 40px/1 'Fira Sans Extra Condensed';
+               display: grid; align-content: center; }
+  .call .act small { font: 800 12px 'Fira Sans Extra Condensed'; font-style: normal; letter-spacing: .12em; margin-bottom: 2px; }
+  .call .why { background: var(--text); color: #111; padding: 12px 14px; font-size: 13.5px; line-height: 1.35; display: grid; align-content: center; }
+
+  .sheet-dim { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); }
+  .sheet { display: none; position: fixed; left: 0; right: 0; bottom: 0; top: 200px; background: var(--bg);
+           border-top: 3px solid var(--yellow); padding: 14px 16px 30px; overflow: hidden; }
+  .show-picker .sheet-dim, .show-picker .sheet { display: block; }
+  .sheet h2 { font: 800 20px 'Fira Sans Extra Condensed'; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+  .sheet p { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+  .grid { display: grid; grid-template-columns: 34px repeat(4, 1fr); gap: 5px; align-items: center; }
+  .grid .r { font: 800 18px 'Fira Sans Extra Condensed'; color: var(--muted); text-align: center; }
+  .grid .k { height: 40px; display: grid; place-items: center; color: #fff; font: 800 18px 'Fira Sans Extra Condensed'; border-radius: 4px; }
+  .grid .used { opacity: .18; }
+  .grid .sel { outline: 3px solid var(--yellow); outline-offset: 1px; }
+</style>
+</head>
+<body>
+  <header><div class="live">● ФЛОП</div><div class="title">Раздача #12 <span>7 игроков</span></div></header>
+  <div class="streets"><div>Префлоп</div><div class="on">Флоп</div><div>Тёрн</div><div>Ривер</div></div>
+
+  <div class="table-wrap" id="table">
+    <div class="oval"></div>
+    <div class="center"><div class="board" id="board"></div><div class="pot">БАНК <b>20</b></div></div>
+  </div>
+
+  <div class="lower">
+    <div class="cards" id="mine"></div>
+    <div class="info"><div class="name">Ты · <span>UTG</span></div><div class="sub">Старшая карта · флеш-дро, 9 аутов</div></div>
+  </div>
+  <div class="win"><div><b>39%</b><small>ШАНС</small></div><div class="meter"><div></div><em></em></div><div style="text-align:right"><b style="color:var(--muted)">20%</b><small>НУЖНО</small></div></div>
+
+  <div class="inputs"><div><span>Ставка на тебе</span><b>5</b></div><div><span>Соперников</span><b>2</b></div></div>
+
+  <div class="call">
+    <div class="act"><small>СОВЕТ</small>КОЛЛ 5</div>
+    <div class="why">Шанс 39 %, а колл требует 20 % — уравнивать выгодно.</div>
+  </div>
+
+  <div class="sheet-dim"></div>
+  <div class="sheet">
+    <h2>Третья карта флопа</h2>
+    <p>Вся колода сразу — одно касание. Занятые карты погашены.</p>
+    <div class="grid" id="grid"></div>
+  </div>
+
+<script type="module">
+  import { card, placeSeats } from './common.js';
+  placeSeats(document.getElementById('table'), { rx: 0.36, ry: 0.43, chipAt: 0.7,
+    render: (s, pos) => `<div class="tag"><i>${s.out ? '—' : pos}</i><b>${s.out ? 'выбыл' : s.name}</b></div>` });
+  const empty = '<span class="card empty"></span>';
+  document.getElementById('board').innerHTML = ['As', '7s', '2d'].map((c) => card(c)).join('') + empty + empty;
+  document.getElementById('mine').innerHTML = card('Js', 'big') + card('Ts', 'big');
+  const used = ['As', '7s', '2d', 'Js', 'Ts'];
+  const SYM = { s: '♠', h: '♥', d: '♦', c: '♣' };
+  document.getElementById('grid').innerHTML = ['A','K','Q','J','T','9','8','7','6','5','4','3','2'].map((r) =>
+    `<div class="r">${r === 'T' ? '10' : r}</div>` + ['s','h','d','c'].map((s) =>
+      `<div class="k suit-${s} ${used.includes(r + s) ? 'used' : ''} ${r + s === 'Qh' ? 'sel' : ''}">${SYM[s]}</div>`).join('')).join('');
+</script>
+</body>
+</html>
