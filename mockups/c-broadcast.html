@@ -25,9 +25,9 @@
                  text-transform: uppercase; color: var(--muted); padding: 8px 0 6px; }
   .streets .on { color: var(--text); box-shadow: inset 0 -3px 0 var(--yellow); }
 
-  .table-wrap { position: relative; height: 330px; margin: 26px 10px 0; }
-  .oval { position: absolute; inset: 40px 34px; border-radius: 50%; background: #17191d; border: 1px solid var(--line); }
-  .oval::before { content: ''; position: absolute; inset: 14px; border-radius: 50%; border: 1px dashed #2f323a; }
+  .table-wrap { position: relative; width: 358px; height: 300px; margin: 22px auto 6px; }
+  .oval { position: absolute; left: var(--sx); top: var(--sy); width: var(--sw); height: var(--sh); border-radius: 999px; background: #17191d; border: 1px solid var(--line); }
+  .oval::before { content: ''; position: absolute; inset: 14px; border-radius: 999px; border: 1px dashed #2f323a; }
   .center { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 8px; }
   .board { display: flex; gap: 4px; }
   .pot { font: 800 13px 'Fira Sans Extra Condensed'; letter-spacing: .1em; color: var(--muted); }
@@ -37,7 +37,9 @@
   .tag { display: flex; height: 26px; box-shadow: 0 4px 10px rgba(0,0,0,.5); }
   .tag i { font: 800 13px/26px 'Fira Sans Extra Condensed'; font-style: normal; background: var(--yellow); color: #111;
            padding: 0 6px; min-width: 30px; text-align: center; }
-  .tag b { font: 600 13px/26px 'Fira Sans Extra Condensed'; background: #24272e; padding: 0 7px; white-space: nowrap; }
+  .tag b { font: 800 14px/26px 'Fira Sans Extra Condensed'; background: #24272e; padding: 0 7px; white-space: nowrap; }
+  .tag i { order: 2; }
+  .croupier { position: absolute; transform: translate(-50%, -50%); font: 800 12px 'Fira Sans Extra Condensed'; letter-spacing: .12em; color: #111; background: var(--text); padding: 4px 9px; }
   .seat.is-hero .tag { height: 32px; } .seat.is-hero .tag i, .seat.is-hero .tag b { line-height: 32px; font-size: 16px; }
   .seat.is-hero .tag b { background: var(--text); color: #111; }
   .seat.is-out .tag { opacity: .45; } .seat.is-out .tag i { background: #3a3d45; color: var(--muted); }
@@ -91,7 +93,7 @@
 </style>
 </head>
 <body>
-  <header><div class="live">● ФЛОП</div><div class="title">Раздача #12 <span>7 игроков</span></div></header>
+  <header><div class="live">● ФЛОП</div><div class="title">Раздача #12 <span>8 игроков</span></div></header>
   <div class="streets"><div>Префлоп</div><div class="on">Флоп</div><div>Тёрн</div><div>Ривер</div></div>
 
   <div class="table-wrap" id="table">
@@ -101,7 +103,7 @@
 
   <div class="lower">
     <div class="cards" id="mine"></div>
-    <div class="info"><div class="name">Ты · <span>UTG</span></div><div class="sub">Старшая карта · флеш-дро, 9 аутов</div></div>
+    <div class="info"><div class="name">Место 5 · <span>UTG</span></div><div class="sub">Старшая карта · флеш-дро, 9 аутов</div></div>
   </div>
   <div class="win"><div><b>39%</b><small>ШАНС</small></div><div class="meter"><div></div><em></em></div><div style="text-align:right"><b style="color:var(--muted)">20%</b><small>НУЖНО</small></div></div>
 
@@ -121,8 +123,8 @@
 
 <script type="module">
   import { card, placeSeats } from './common.js';
-  placeSeats(document.getElementById('table'), { rx: 0.36, ry: 0.43, chipAt: 0.7,
-    render: (s, pos) => `<div class="tag"><i>${s.out ? '—' : pos}</i><b>${s.out ? 'выбыл' : s.name}</b></div>` });
+  placeSeats(document.getElementById('table'), { dealer: 'ДИЛЕР',
+    render: (n, pos, empty) => `<div class="tag"><b>${n}</b><i>${empty ? '—' : pos}</i></div>` });
   const empty = '<span class="card empty"></span>';
   document.getElementById('board').innerHTML = ['As', '7s', '2d'].map((c) => card(c)).join('') + empty + empty;
   document.getElementById('mine').innerHTML = card('Js', 'big') + card('Ts', 'big');

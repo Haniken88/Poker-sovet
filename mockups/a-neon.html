@@ -24,8 +24,8 @@
                  letter-spacing: .06em; color: var(--muted); padding: 7px 0; border-radius: 8px; background: var(--panel); }
   .streets .on { color: #04110d; background: var(--neon); }
 
-  .table-wrap { position: relative; height: 340px; margin: 34px 18px 0; }
-  .felt { position: absolute; inset: 34px 40px; border-radius: 50%;
+  .table-wrap { position: relative; width: 358px; height: 300px; margin: 30px auto 0; }
+  .felt { position: absolute; left: var(--sx); top: var(--sy); width: var(--sw); height: var(--sh); border-radius: 999px;
           background: radial-gradient(ellipse at 50% 40%, #0d2a2a 0%, #081419 70%);
           border: 2px solid var(--neon);
           box-shadow: 0 0 0 6px #0a1018, 0 0 28px rgba(34,242,196,.35), inset 0 0 40px rgba(34,242,196,.12); }
@@ -34,9 +34,11 @@
   .pot { font: 700 13px 'Saira Condensed'; letter-spacing: .08em; color: var(--muted); text-transform: uppercase; }
   .pot b { color: var(--gold); font-size: 16px; margin-left: 4px; }
   .seat { position: absolute; transform: translate(-50%, -50%); display: grid; justify-items: center; gap: 3px; }
-  .seat .disc { width: 46px; height: 46px; border-radius: 50%; background: var(--panel); border: 1.5px solid var(--line);
+  .seat .disc { width: 44px; height: 44px; border-radius: 50%; background: var(--panel); border: 1.5px solid var(--line);
                 display: grid; place-items: center; font: 800 14px 'Saira Condensed'; color: var(--text); }
-  .seat .name { font: 600 11px 'Saira Condensed'; color: var(--muted); }
+  .seat .name { position: absolute; top: -9px; right: -7px; min-width: 18px; height: 18px; border-radius: 9px; background: #1d2238; font: 700 11px/18px 'Saira Condensed'; color: var(--muted); text-align: center; }
+  .seat.is-hero .name { background: var(--hot); color: #fff; }
+  .croupier { position: absolute; transform: translate(-50%, -50%); font: 700 11px 'Saira Condensed'; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); border: 1px dashed #2e3556; border-radius: 8px; padding: 5px 8px; background: var(--bg); }
   .seat.is-hero .disc { border-color: var(--hot); box-shadow: 0 0 16px rgba(255,61,139,.55); color: var(--hot); }
   .seat.is-out { opacity: .35; }
   .seat.is-out .disc { border-style: dashed; color: var(--muted); text-decoration: line-through; }
@@ -105,7 +107,7 @@
       <div class="pot">Банк <b>20</b></div>
     </div>
   </div>
-  <div class="hint" style="position:static;margin-top:22px">Тапни игрока — выбыл · Тяни <b style="color:var(--gold)">D</b> на другое место</div>
+  <div class="hint" style="position:static;margin-top:12px">Тапни место — пусто/занято · Тяни <b style="color:var(--gold)">D</b> на другое место</div>
 
   <div class="me">
     <div class="cards" id="mine"></div>
@@ -134,8 +136,8 @@
 <script type="module">
   import { card, placeSeats } from './common.js';
   const t = document.getElementById('table');
-  placeSeats(t, { rx: 0.41, ry: 0.44, chipAt: 0.62,
-    render: (s, pos) => `<div class="disc">${s.out ? '—' : pos}</div><div class="name">${s.out ? 'выбыл' : s.name}</div>` });
+  placeSeats(t, { dealer: 'Дилер',
+    render: (n, pos, empty) => `<div class="disc">${empty ? '—' : pos}</div><div class="name">${n}</div>` });
   document.getElementById('board').innerHTML = ['As', '7s', '2d'].map((c) => card(c)).join('') + card('2d', 'empty').replace(/<b>.*<\/i>/, '') + card('2d', 'empty').replace(/<b>.*<\/i>/, '');
   document.getElementById('mine').innerHTML = card('Js', 'big') + card('Ts', 'big');
   document.getElementById('already').innerHTML = card('As') + ' ' + card('7s');
