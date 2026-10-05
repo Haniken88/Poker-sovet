@@ -1,6 +1,6 @@
 // Совет после флопа: комбинация, дро, шанс выиграть и решение по цене колла.
 import { rankOf, suitOf } from './cards.js';
-import { evaluate, categoryOf, CATEGORY, CATEGORY_NAMES } from './evaluator.js';
+import { evaluate, categoryOf, handName as comboName, CATEGORY } from './evaluator.js';
 import { calcEquity } from './equity.js';
 import { handClass } from './hands.js';
 import { HAND_RANKS } from './handRanks.js';
@@ -16,7 +16,7 @@ export function describeHand(hero, board) {
   const value = evaluate([...hero, ...board]);
   const category = categoryOf(value);
   if (board.length === 5 && evaluate(board) === value) return 'Комбинация на столе (у всех)';
-  if (category !== CATEGORY.PAIR) return CATEGORY_NAMES[category];
+  if (category !== CATEGORY.PAIR) return comboName(value);
 
   const boardRanks = board.map(rankOf).sort((a, b) => b - a);
   const [a, b] = hero.map(rankOf);
@@ -116,6 +116,35 @@ export function villainFilter({ board, preflopAction = 'none', facingBet = false
 
 const chips = (amount) => Math.round(amount * 10) / 10;
 
+// Процент для людей: у краёв с десятыми (99,7 % — не то же самое, что 100 %).
+export function percentText(share) {
+  const p = share * 100;
+  if (p > 99 && p < 100) return String(Math.min(99.9, Math.floor(p * 10) / 10)).replace('.', ',');
+  if (p > 0 && p < 1) return String(Math.max(0.1, Math.ceil(p * 10) / 10)).replace('.', ',');
+  return String(Math.round(p));
+}
+
+/**
+ * Какие руки соперника бьют тебя прямо сейчас (на текущих картах стола) — точный перебор.
+ * Возвращает { count, total, hands: [{ cards: [a, b], name }] }.
+ */
+export function whoBeatsYou(hero, board) {
+  const mine = evaluate([...hero, ...board]);
+  const used = new Set([...hero, ...board]);
+  const deck = [];
+  for (let c = 0; c < 52; c++) if (!used.has(c)) deck.push(c);
+  const hands = [];
+  let total = 0;
+  for (let i = 0; i < deck.length; i++) {
+    for (let j = i + 1; j < deck.length; j++) {
+      total++;
+      const theirs = evaluate([deck[i], deck[j], ...board]);
+      if (theirs > mine) hands.push({ cards: [deck[j], deck[i]], name: comboName(theirs) });
+    }
+  }
+  return { count: hands.length, total, hands };
+}
+
 /**
  * hero — 2 карты, board — 3–5 карт, opponents — сколько соперников ещё в раздаче,
  * pot — банк ДО твоего хода (со ставками соперников на этой улице),
@@ -133,7 +162,7 @@ export function postflopAdvice({
   const { equity } = calcEquity({ hero, board, opponents, iterations, random, accept });
   const handName = describeHand(hero, board);
   const draws = findDraws(hero, board);
-  const percent = Math.round(equity * 100);
+  const percent = percentText(equity);
   const river = board.length === 5;
 
   // Нужный шанс для ставки на «вэлью»: против многих соперников ниже.

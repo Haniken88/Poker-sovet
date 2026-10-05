@@ -125,4 +125,7 @@ export function evaluate(cards) {
 }
 
 export const categoryOf = (value) => Math.floor(value / 16 ** 5);
-export const handName = (value) => CATEGORY_NAMES[categoryOf(value)];
+// Старший номинал комбинации (для стрита — его верхняя карта).
+const topRank = (value) => Math.floor(value / 16 ** 4) % 16;
+export const handName = (value) =>
+  categoryOf(value) === CATEGORY.STRAIGHT_FLUSH && topRank(value) === 14 ? 'Роял-флеш' : CATEGORY_NAMES[categoryOf(value)];

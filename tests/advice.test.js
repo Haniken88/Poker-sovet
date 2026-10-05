@@ -103,3 +103,28 @@ test('постфлоп: совет приходит быстро', () => {
   const ms = performance.now() - start;
   assert.ok(ms < 1000, `заняло ${ms.toFixed(0)} мс`);
 });
+
+test('роял-флеш называется роял-флешем', async () => {
+  const { evaluate, handName } = await import('../src/evaluator.js');
+  assert.equal(handName(evaluate(cards('Ah Kh Qh Jh Th'))), 'Роял-флеш');
+  assert.equal(handName(evaluate(cards('Kh Qh Jh Th 9h'))), 'Стрит-флеш');
+});
+
+test('кто тебя бьёт: каре троек на A-K-Q червей бьёт только J♥10♥', async () => {
+  const { whoBeatsYou } = await import('../src/postflop.js');
+  const { cardToString } = await import('../src/cards.js');
+  const result = whoBeatsYou(cards('3c 3d'), cards('3h Ah Kh Qh 3s'));
+  assert.equal(result.total, 990);
+  assert.equal(result.count, 1);
+  assert.deepEqual(result.hands[0].cards.map(cardToString).sort(), ['Jh', 'Th']);
+  assert.equal(result.hands[0].name, 'Роял-флеш');
+});
+
+test('проценты у краёв — с десятыми', async () => {
+  const { percentText } = await import('../src/postflop.js');
+  assert.equal(percentText(0.9968), '99,6');
+  assert.equal(percentText(0.99999), '99,9');
+  assert.equal(percentText(1), '100');
+  assert.equal(percentText(0.003), '0,3');
+  assert.equal(percentText(0.5), '50');
+});

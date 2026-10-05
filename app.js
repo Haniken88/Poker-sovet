@@ -1,7 +1,7 @@
 // Экран приложения: стол, выбор карт, ставки и совет.
 import { makeCard, rankOf, suitOf } from './src/cards.js';
 import { preflopAdvice } from './src/preflop.js';
-import { postflopAdvice } from './src/postflop.js';
+import { postflopAdvice, whoBeatsYou, percentText } from './src/postflop.js';
 import { calcEquity } from './src/equity.js';
 import { handClass } from './src/hands.js';
 import { GEOMETRY, DEALER_XY, SEAT_XY, SEAT_COUNT, activeSeats, seatPosition, nextActive } from './src/table.js';
@@ -322,6 +322,8 @@ function renderTicket() {
       const need = state.toCall ? ` · нужно ${Math.round((state.toCall / (state.pot + state.toCall)) * 100)} %` : '';
       const draws = advice.draws.names.length ? ` · ${advice.draws.names.join(', ')}, ${advice.draws.outs} аутов` : '';
       lines = [`<b>${advice.handName}</b>${draws}${need}`, advice.reason];
+      const danger = dangerLine(hero, board);
+      if (danger) lines.push(danger);
     }
     const { title, chips } = howMuch(advice, count === 0, heroPos);
     if (chips) lines.unshift(chips);
@@ -329,10 +331,23 @@ function renderTicket() {
     ticket.innerHTML = `
       <div class="top-row">
         <div class="act ${advice.action === 'fold' ? 'fold' : ''}"><small>Совет</small>${title}</div>
-        <div class="gauge"><b>${Math.round(equity * 100)}%</b><span>шанс выиграть</span></div>
+        <div class="gauge"><b>${percentText(equity)}%</b><span>шанс выиграть</span></div>
       </div>
       <hr>${lines.map((l) => `<div class="line">${l}</div>`).join('')}`;
   }, 30);
+}
+
+// Кто бьёт тебя на этих картах стола — если таких рук мало, называем их.
+const shortCard = (c) => `<span class="${SUIT_CLASS[suitOf(c)]}">${rankLabel(rankOf(c))}${SUIT_GLYPH[suitOf(c)]}</span>`;
+function dangerLine(hero, board) {
+  const { count, hands } = whoBeatsYou(hero, board);
+  const river = board.length === 5;
+  if (count === 0) {
+    return river ? '<b>Лучшая возможная рука</b> — тебя не бьёт ничего.' : 'Сейчас тебя не бьёт ничего (но карты ещё выйдут).';
+  }
+  if (count > 6) return '';
+  const list = hands.map((h) => `${shortCard(h.cards[0])} ${shortCard(h.cards[1])} — ${h.name.toLowerCase()}`).join(', ');
+  return `<b>${river ? 'Тебя бьёт' : 'Сейчас тебя бьёт'} только:</b> ${list}.`;
 }
 
 // Сколько ставить — в больших блайндах и сразу в деньгах: «3 больших блайнда — это 600».
