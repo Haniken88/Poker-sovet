@@ -6,7 +6,9 @@ import { evaluate } from './evaluator.js';
  * hero — 2 карты игрока, board — 0–5 общих карт,
  * opponents — сколько соперников с неизвестными картами,
  * known — массив известных рук соперников (для разборов и тестов),
- * iterations — сколько раздач сыграть, random — свой генератор (для тестов).
+ * iterations — сколько раздач сыграть, random — свой генератор (для тестов),
+ * accept(a, b) — какие руки соперник правдоподобно держит (по его действиям);
+ *   неподходящую руку пересдаём до 30 раз.
  * Возвращает { win, tie, equity } в долях от 1.
  */
 export function calcEquity({
@@ -16,6 +18,7 @@ export function calcEquity({
   known = [],
   iterations = 10000,
   random = Math.random,
+  accept = null,
 }) {
   const used = new Set([...hero, ...board, ...known.flat()]);
   if (used.size !== hero.length + board.length + known.flat().length) {
@@ -35,13 +38,28 @@ export function calcEquity({
   let wins = 0, ties = 0, share = 0;
 
   for (let round = 0; round < iterations; round++) {
-    // Частичная перетасовка: в начало колоды встают ровно нужные карты.
-    for (let i = 0; i < need; i++) {
-      const j = i + Math.floor(random() * (deck.length - i));
-      const t = deck[i]; deck[i] = deck[j]; deck[j] = t;
+    // Частичная перетасовка: в начало колоды встают ровно нужные карты —
+    // сначала руки соперников (по 2 карты), потом недостающие общие карты.
+    const size = deck.length;
+    for (let p = 0; p < opponents; p++) {
+      const at = p * 2;
+      for (let tries = 0; ; tries++) {
+        const i = at + Math.floor(random() * (size - at));
+        let j = at + Math.floor(random() * (size - at - 1));
+        if (j >= i) j++;
+        if (!accept || tries >= 30 || accept(deck[i], deck[j])) {
+          let t = deck[at]; deck[at] = deck[i]; deck[i] = t;
+          if (j === at) j = i;
+          t = deck[at + 1]; deck[at + 1] = deck[j]; deck[j] = t;
+          break;
+        }
+      }
     }
+    const boardFrom = opponents * 2;
     for (let i = 0; i < missingBoard; i++) {
-      heroHand[boardStart + i] = villainHand[boardStart + i] = deck[i];
+      const j = boardFrom + i + Math.floor(random() * (size - boardFrom - i));
+      const t = deck[boardFrom + i]; deck[boardFrom + i] = deck[j]; deck[j] = t;
+      heroHand[boardStart + i] = villainHand[boardStart + i] = deck[boardFrom + i];
     }
     const heroValue = evaluate(heroHand);
 
@@ -57,8 +75,8 @@ export function calcEquity({
       if (lost) break;
     }
     for (let p = 0; p < opponents && !lost; p++) {
-      villainHand[0] = deck[missingBoard + p * 2];
-      villainHand[1] = deck[missingBoard + p * 2 + 1];
+      villainHand[0] = deck[p * 2];
+      villainHand[1] = deck[p * 2 + 1];
       check(evaluate(villainHand));
     }
 
