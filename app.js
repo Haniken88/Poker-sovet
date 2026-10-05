@@ -349,18 +349,31 @@ async function copyHand() {
       hole: state.hole, board: state.board, preflop: state.preflop, limpers: state.limpers, raiseTo: state.raiseTo,
       pot: state.pot, toCall: state.toCall, opponents: state.opponents, style: state.style })}`,
   ].filter(Boolean).join('\n');
-  try {
-    await navigator.clipboard.writeText(text);
-    $('disagree').textContent = 'Скопировано — вставь в чат с Claude и допиши, что думаешь';
-  } catch {
-    // Если телефон не дал скопировать — показываем текст, его можно выделить вручную.
-    openSheet(`<h2>Раздача<button data-act="close">Закрыть</button></h2>
-      <textarea class="copy-box" readonly>${text.replace(/</g, '&lt;')}</textarea>
-      <p class="note">Выдели весь текст и скопируй, потом вставь в чат с Claude.</p>`);
-    sheet.querySelector('[data-act="close"]').onclick = closeSheet;
-    sheet.querySelector('textarea').select();
-  }
+  // Главный путь с телефона — письмо себе: Claude сам найдёт его в почте по теме.
+  // Адрес не вшиваем (код публичный) — айфон подставит свой адрес по первым буквам.
+  openSheet(`<h2>Не согласен<button data-act="close">Закрыть</button></h2>
+    <div class="menu">
+      <a class="mail-btn" href="mailto:?subject=${encodeURIComponent(MAIL_SUBJECT)}&body=${encodeURIComponent(text)}">
+        Отправить письмом себе <small>потом скажи Claude «проверь раздачи на почте»</small></a>
+      <button data-act="copy">Скопировать текстом <small>вставить в чат вручную</small></button>
+    </div>
+    <p class="note">В письме после «Я думаю:» допиши своё мнение. Получатель — ты сам: начни набирать свой адрес.</p>`);
+  sheet.querySelector('[data-act="close"]').onclick = closeSheet;
+  sheet.querySelector('[data-act="copy"]').onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      sheet.querySelector('[data-act="copy"]').innerHTML = 'Скопировано <small>вставь в чат с Claude</small>';
+    } catch {
+      // Если телефон не дал скопировать — показываем текст, его можно выделить вручную.
+      openSheet(`<h2>Раздача<button data-act="close">Закрыть</button></h2>
+        <textarea class="copy-box" readonly>${text.replace(/</g, '&lt;')}</textarea>
+        <p class="note">Выдели весь текст и скопируй, потом вставь в чат с Claude.</p>`);
+      sheet.querySelector('[data-act="close"]').onclick = closeSheet;
+      sheet.querySelector('textarea').select();
+    }
+  };
 }
+const MAIL_SUBJECT = 'Покер — раздача для разбора';
 function renderTicket() {
   const ticket = $('ticket');
   const heroPos = seatPosition(state.occupied, state.button, state.hero);
@@ -419,7 +432,7 @@ function renderTicket() {
         <div class="gauge"><b>${percentText(equity)}%</b><span>${count === 0 ? `шанс ${gaugeNote}` : gaugeNote}</span></div>
       </div>
       <hr>${lines.map((l) => `<div class="line">${l}</div>`).join('')}
-      <button class="disagree" id="disagree">Не согласен — скопировать раздачу</button>`;
+      <button class="disagree" id="disagree">Не согласен — отправить раздачу</button>`;
     lastAdvice = { advice, equity, title };
     $('disagree').onclick = copyHand;
   }, 30);

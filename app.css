@@ -153,9 +153,10 @@ h1 em { font-style: normal; color: var(--gold); }
 .suits.waiting button { opacity: .35; }
 .sheet .remove { margin-top: 12px; width: 100%; min-height: 44px; border-radius: 12px; border: 1px solid var(--panel-line); color: var(--muted); font-weight: 700; }
 .menu { display: grid; gap: 8px; }
-.menu button { min-height: 52px; border-radius: 12px; background: var(--panel); border: 1px solid var(--panel-line);
+.menu button, .menu .mail-btn { color: inherit; text-decoration: none; min-height: 52px; border-radius: 12px; background: var(--panel); border: 1px solid var(--panel-line);
                text-align: left; padding: 0 16px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
-.menu button small { color: var(--muted); font-weight: 500; }
+.menu button small, .menu .mail-btn small { color: var(--muted); font-weight: 500; font-size: 12px; text-align: right; }
+.menu .mail-btn { border-color: var(--gold); }
 .menu button:disabled { opacity: .4; }
 .note { font-size: 12px; color: var(--muted); margin-top: 12px; }
 
