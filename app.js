@@ -241,8 +241,10 @@ function onCardsChanged() {
 }
 
 // ---------- Ввод ставок ----------
-const fmt = (n) => String(Math.round(n * 10) / 10).replace('.', ',');
-const parseNum = (s) => { const n = parseFloat(String(s).replace(',', '.')); return Number.isFinite(n) && n >= 0 ? n : 0; };
+// Числа по-русски: 100 000 и 2,5.
+const numberFormat = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 });
+const fmt = (n) => numberFormat.format(Math.round(n * 10) / 10);
+const parseNum = (s) => { const n = parseFloat(String(s).replace(/\s/g, '').replace(',', '.')); return Number.isFinite(n) && n >= 0 ? n : 0; };
 
 function stepper(key, name, step, min = 0, max = 100000) {
   return `<label class="stepper"><span class="name">${name}</span>
@@ -398,7 +400,9 @@ function renderTicket() {
       advice = postflopAdvice({ hero, board, opponents: state.opponents, pot: state.pot,
         toCall: state.toCall, preflopAction: state.preflop, stack: stackOrInf(), style: state.style, iterations: 6000 });
       equity = advice.equity;
-      gaugeNote = `против любых рук: ${percentText(advice.randomEquity)} %`;
+      const diff = Math.abs(advice.randomEquity - advice.equity) >= 0.05;
+      gaugeNote = (state.toCall ? 'шанс против его ставки' : 'шанс выиграть')
+        + (diff ? `<br><small>со случайными картами — ${percentText(advice.randomEquity)} %</small>` : '');
       const price = Math.min(state.toCall, stackOrInf());
       const need = state.toCall ? ` · нужно ${Math.round((price / (state.pot + state.toCall + price)) * 100)} %` : '';
       const draws = advice.draws.names.length ? ` · ${advice.draws.names.join(', ')}, ${advice.draws.outs} аутов` : '';
@@ -412,7 +416,7 @@ function renderTicket() {
     ticket.innerHTML = `
       <div class="top-row">
         <div class="act ${advice.action === 'fold' ? 'fold' : ''}"><small>${advice.close ? 'Спорно — почти равно' : 'Совет'}${blinds ? ` · ${blinds}` : ''}</small>${title}</div>
-        <div class="gauge"><b>${percentText(equity)}%</b><span>${gaugeNote === 'шанс выиграть' ? gaugeNote : gaugeNote.startsWith('против любых') ? `шанс с учётом ставок<br>${gaugeNote}` : `шанс ${gaugeNote}`}</span></div>
+        <div class="gauge"><b>${percentText(equity)}%</b><span>${count === 0 ? `шанс ${gaugeNote}` : gaugeNote}</span></div>
       </div>
       <hr>${lines.map((l) => `<div class="line">${l}</div>`).join('')}
       <button class="disagree" id="disagree">Не согласен — скопировать раздачу</button>`;
@@ -466,7 +470,56 @@ function renderHand() {
   $('hero-pos').innerHTML = `<small>Место ${state.hero} · ${activeCount()} за столом</small>${pos ? pos.name : '—'}`;
 }
 
+// Итог раздачи: выиграл / проиграл / сбросил — стек меняется сам.
+function heroPosted() {
+  const pos = seatPosition(state.occupied, state.button, state.hero);
+  return pos?.key === 'BB' ? state.bb : pos?.key === 'SB' ? state.bb / 2 : 0;
+}
+// Сколько примерно вложил в банк ты (подсказка, владелец поправит).
+const roundSB = (n) => Math.round(n / (state.bb / 2)) * (state.bb / 2);
+function preflopInvested() {
+  if (/raise|3bet/.test(state.preflop)) return state.raiseTo; // уравнял повышение
+  if (state.preflop === 'limp') return state.bb;
+  return Math.max(heroPosted(), 3 * state.bb); // повышал сам
+}
+function guessResult(kind) {
+  const preflop = boardCount() < 3;
+  if (kind === 'fold') return preflop ? heroPosted() : preflopInvested();
+  if (kind === 'lose') return roundSB(preflop ? preflopInvested() : preflopInvested() + state.toCall);
+  // Выиграл: всё, что положили соперники = банк минус твоя доля плюс их ставка на этой улице.
+  return Math.max(state.bb, roundSB(preflop ? preflopInvested() + state.bb / 2 : state.pot - preflopInvested() + state.toCall));
+}
+
 $('new-hand').onclick = () => {
+  if (!state.stack || state.hole.some((c) => c === null)) return startNewHand();
+  state.resultKind = 'win';
+  state.result = guessResult('win');
+  const kinds = [['win', 'Выиграл'], ['lose', 'Проиграл'], ['fold', 'Сбросил']];
+  const draw = () => {
+    openSheet(`
+      <h2>Чем кончилась раздача?<button data-act="skip">Не считать</button></h2>
+      <div class="segments">${kinds.map(([k, t]) => `<button data-kind="${k}" aria-pressed="${state.resultKind === k}">${t}</button>`).join('')}</div>
+      <div class="steppers" style="margin-top:12px">${stepper('result', state.resultKind === 'win' ? 'Сколько выиграл (чистыми)' : 'Сколько потерял', state.bb / 2)}</div>
+      <p class="note">Сумму приложение прикинуло само — поправь, если не так. Стек сейчас ${fmt(state.stack)}, станет
+        <b>${fmt(Math.max(0, state.stack + (state.resultKind === 'win' ? 1 : -1) * state.result))}</b>.</p>
+      <button class="new-hand big" data-act="done">Готово — новая раздача</button>`);
+    for (const b of sheet.querySelectorAll('[data-kind]')) b.onclick = () => {
+      state.resultKind = b.dataset.kind; state.result = guessResult(state.resultKind); draw();
+    };
+    bindSteppers(sheet);
+    for (const b of sheet.querySelectorAll('button[data-step], input[data-key]')) {
+      b.addEventListener(b.tagName === 'INPUT' ? 'change' : 'click', () => setTimeout(draw, 0));
+    }
+    sheet.querySelector('[data-act="skip"]').onclick = () => { closeSheet(); startNewHand(); };
+    sheet.querySelector('[data-act="done"]').onclick = () => {
+      state.stack = Math.max(0, state.stack + (state.resultKind === 'win' ? 1 : -1) * state.result);
+      closeSheet(); startNewHand();
+    };
+  };
+  draw();
+};
+
+function startNewHand() {
   state.button = nextActive(state.occupied, state.button); // кнопка уходит к следующему игроку
   state.hole = [null, null];
   state.board = [null, null, null, null, null];
@@ -474,7 +527,7 @@ $('new-hand').onclick = () => {
   state.pot = 0; state.toCall = 0; state.opponents = 1;
   persist();
   render();
-};
+}
 
 function openSettings() {
   openSheet(`
