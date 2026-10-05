@@ -148,6 +148,16 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
       }
       return result('fold', 0, `${cls} против повышения играет «на сет», а для этого стек должен быть хотя бы в ${need} раз больше цены колла (сейчас в ${Math.floor(implied(cost))}).`);
     }
+    // Тузы одной масти: флеш (часто натсовый), стрит A-2-3-4-5 и пара с тузом. Против минимального
+    // повышения — колл с любого места, против повышения до 4 ББ — с поздних мест и блайндов.
+    if (inRange(cls, 'A2s-A9s')) {
+      if (raiseBB <= 2.5 && implied(cost) >= 15) {
+        return result('call', raiseTo, `Повышение минимальное, а ${cls} — флеш с тузом, стрит A-2-3-4-5 и пара тузов. За такую цену стоит посмотреть флоп.`);
+      }
+      if (raiseBB <= 4 && (late || position.group === 'blinds') && implied(cost) >= 20) {
+        return result('call', raiseTo, `${cls} из поздней позиции или с блайнда — колл: флеш с тузом окупает дешёвые входы.`);
+      }
+    }
     // Одномастные связки и тузы: дёшево, в позиции или на ББ, при глубоких стеках.
     if (inRange(cls, SPECULATIVE) && raiseBB <= 4 && (late || isBB) && implied(cost) >= SPECULATIVE_IMPLIED) {
       return result('call', raiseTo, `${cls} — рука «на попадание»: колл дешёвый, стеки глубокие, а флеш или стрит выиграют большой банк.`);
