@@ -120,6 +120,18 @@ export function postflopAdvice({
   const percent = percentText(equity);
   const river = board.length === 5;
 
+  // Сила руки относительно стола: пара, которая есть у всех на столе, — не наша заслуга.
+  const mine = categoryOf(evaluate([...hero, ...board]));
+  const boardOnly = categoryOf(evaluate(board));
+  const madeHand = mine >= CATEGORY.PAIR && !handName.includes('на столе');
+  const topPairPlus = madeHand && (/Старшая пара|Оверпара/.test(handName) || mine - boardOnly >= 1 && mine >= CATEGORY.TWO_PAIR);
+  const bigHand = mine - boardOnly >= 2 || mine >= CATEGORY.STRAIGHT && !handName.includes('на столе');
+
+  // SPR — сколько банков помещается в стеке. Маленький — можно ва-банк со старшей парой,
+  // большой — одной парой весь стек не отдают.
+  const spr = stack / (pot + bet);
+  const sprText = Number.isFinite(spr) ? String(Math.round(spr * 10) / 10).replace('.', ',') : '';
+
   // Нужный шанс для ставки на «вэлью»: против многих соперников ниже.
   const valueNeed = Math.max(0.35, 0.7 - 0.1 * opponents);
   const strongDraw = draws.outs >= 8 && !river;
@@ -132,12 +144,15 @@ export function postflopAdvice({
       action: act,
       amount: amount ? chips(amount) : 0,
       text: ACTION_TEXT[act] + (amount ? `${act === 'raise' ? ' до' : ''} ${chips(amount)}` : ''),
-      reason, equity, randomEquity, handName, draws,
+      reason, equity, randomEquity, handName, draws, spr,
     };
   };
 
   if (!bet) {
     if (equity >= valueNeed) {
+      if (spr < 1.5 && topPairPlus) {
+        return result('allin', stack, `Шанс ${percent} %, а в стеке меньше полутора банков (SPR ${sprText}) — ставь всё сразу.`);
+      }
       return result('bet', pot * 0.66, `Шанс ${percent} % — ты, скорее всего, впереди: ставь 2/3 банка, пусть платят худшие руки.`);
     }
     if (strongDraw && opponents <= 2) {
@@ -153,13 +168,23 @@ export function postflopAdvice({
   const vsValue = calcEquity({ hero, board, opponents, ranges: value ? [...value, ...ranges.slice(1)] : ranges,
     iterations: Math.round(iterations / 2), random }).equity;
   // На ривере повышение уравняют только руки получше — нужен запас побольше.
-  if (vsValue >= Math.max(valueNeed, river ? 0.7 : 0.55) && price < stack) {
+  // При глубоких стеках (SPR > 6) одной парой банк не раздуваем.
+  const deepOnePair = spr > 6 && !bigHand;
+  if (vsValue >= Math.max(valueNeed, river ? 0.7 : 0.55) && price < stack && !deepOnePair) {
     return result('raise', bet * 3, `Ты впереди даже против рук, которыми так ставят без блефа (${percentText(vsValue)} %), — повышай втрое.`);
   }
-  // На флопе впереди ещё ставки: дро без готовой пары реализует шанс не полностью
-  // (на тёрне снова придётся платить). При ва-банке ставок больше не будет — без поправки.
-  const madeHand = categoryOf(evaluate([...hero, ...board])) >= CATEGORY.PAIR && !describeHand(hero, board).includes('на столе');
-  const realized = board.length === 3 && !madeHand && price < stack ? equity * 0.87 : equity;
+  // Маленький SPR и старшая пара или сильнее: сдаваться поздно — ва-банк.
+  if (spr < 3 && topPairPlus && equity >= potOdds) {
+    return result('allin', stack, `Стек меньше трёх банков (SPR ${sprText}), а у тебя ${handName.toLowerCase()} — с такой рукой при маленьком стеке идут ва-банк.`);
+  }
+
+  // Дро. На флопе впереди ещё ставки — шанс реализуется не полностью (на тёрне снова платить).
+  // Зато при глубоких стеках, когда доедешь, выиграешь ещё (неявные шансы) — если ставка не больше банка.
+  const drawing = !madeHand && !river && price < stack;
+  const futureWin = drawing && spr >= 4 && bet <= pot ? 0.3 * Math.min(stack - price, pot + bet + price) : 0;
+  const realized = drawing && board.length === 3 ? equity * 0.87 : equity;
+  const drawOdds = price / (pot + bet + price + futureWin);
+
   // Решение зависит от того, как блефует соперник? Скажем об этом прямо.
   const flip = (other) => {
     if (!compareStyles || style === other) return null;
@@ -167,10 +192,13 @@ export function postflopAdvice({
       iterations: Math.round(iterations / 2), random, compareStyles: false });
     return alt.action;
   };
-  if (realized >= potOdds) {
+  if (realized >= drawOdds) {
     const rare = flip('rare');
     const note = rare === 'fold' ? ' Но если он почти не блефует — пас.' : '';
-    return result('call', price, `Шанс ${percent} %, а колл требует ${need} % — уравнивать выгодно.${note}`);
+    const implied = futureWin && realized < potOdds
+      ? ` Напрямую колл чуть дороже шанса, но стеки глубокие: доедешь — выиграешь ещё.` : '';
+    const deep = deepOnePair && vsValue >= 0.55 ? ' Стеки глубокие — одной парой банк не раздувай, просто уравнивай.' : '';
+    return result('call', price, `Шанс ${percent} %, а колл требует ${need} % — уравнивать выгодно.${implied}${deep}${note}`);
   }
   if (realized < equity && equity >= potOdds) {
     return result('fold', 0, `Шанс ${percent} %, но это до ривера, а на тёрне снова придётся платить: дро стоит около ${percentText(realized)} %, колл требует ${need} %.`);

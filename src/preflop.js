@@ -27,6 +27,13 @@ const CALL_SMALL = '22-JJ, ATs-AQs, KJs+, QJs, JTs, T9s, 98s, AQo, KQo';
 const CALL_BB_EXTRA = 'A2s+, K9s+, Q9s+, J9s+, T8s+, 97s+, 87s, 76s, 65s, ATo+, KJo+, QJo';
 const CALL_BIG = '77-JJ, AQs, KQs, AQo';
 
+// Спекулятивные руки: дешёвый колл ради большого банка, когда попадёшь (нужны глубокие стеки).
+const SPECULATIVE = 'A2s-A9s, KTs, QTs, J9s, T9s, 98s, 87s, 76s, 65s, 54s, T8s, 97s, 86s, 75s';
+// Сколько эффективных стеков (в разах от цены колла) нужно, чтобы ловить сет / доезжать.
+const SET_MINING_IN_POSITION = 18; // 15–20 по книгам, в позиции
+const SET_MINING_OUT_OF_POSITION = 25; // без позиции — нужно больше
+const SPECULATIVE_IMPLIED = 30;
+
 // Против повторного повышения (3-бета).
 const FOURBET = 'KK+, AKs';
 const CALL_3BET = 'QQ, JJ, AKo, AQs';
@@ -44,7 +51,8 @@ const chips = (amount) => Math.round(amount * 10) / 10;
  * action — что было до тебя: 'none' (все сбросили или ты первый), 'limp',
  *   'raise' (одно повышение), '3bet' (повышение на повышение);
  * limpers — сколько игроков уравняли блайнд; raiseTo — до скольки повысили;
- * bigBlind — размер большого блайнда (все суммы в тех же деньгах).
+ * bigBlind — размер большого блайнда (все суммы в тех же деньгах);
+ * stack — эффективный стек: меньший из твоего и соперника (больше него не выиграешь и не проиграешь).
  * Возвращает { action, amount, text, reason, hand }.
  */
 export function preflopAdvice({ hero, position, action = 'none', limpers = 0, raiseTo = 0, bigBlind = 1, stack = Infinity }) {
@@ -97,6 +105,12 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
     return result('fold', 0, `${cls} слишком слабая для этой позиции: после тебя ещё ${position.behind} игроков.`);
   }
 
+  // Сколько реально доплатить (блайнд уже на столе) и во сколько раз стек больше этой цены.
+  const posted = isBB ? bb : position.key === 'SB' ? bb / 2 : 0;
+  const implied = (cost) => (cost > 0 ? stack / cost : Infinity);
+  const isPair = cls.length === 2;
+  const inPosition = position.group !== 'blinds';
+
   if (action === 'limp') {
     const raiseSize = (3 + limpers) * bb;
     // Повышаем, если рука входит в диапазон с запасом (на позицию строже).
@@ -104,13 +118,18 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
       return result('raise', raiseSize, `${cls} — сильная рука, повышай и забирай инициативу у лимперов.`);
     }
     if (isBB) return result('check', 0, 'Можно посмотреть флоп бесплатно.');
-    if (inRange(cls, LIMP_CALL) && inRange(cls, openRange(position.behind))) {
-      return result('call', bb, `${cls} хорошо играет в многосторонних банках: можно доехать до сета или дро.`);
+    // Малый блайнд доплачивает всего полблайнда при уже большом банке — входим шире.
+    if (position.key === 'SB' && topClasses(0.55).has(cls)) {
+      return result('call', bb, `Доплатить всего полблайнда, а в банке уже ${limpers + 2} блайнда — с ${cls} выгодно посмотреть флоп.`);
+    }
+    if (inRange(cls, LIMP_CALL) && inRange(cls, openRange(position.behind)) && implied(bb) >= 20) {
+      return result('call', bb, `${cls} хорошо играет в многосторонних банках: дёшево, а попадёшь в сет или дро — выиграешь много.`);
     }
     return result('fold', 0, `${cls} не стоит денег даже против лимперов.`);
   }
 
   const raiseBB = raiseTo / bb;
+  const cost = raiseTo - posted;
 
   if (action === 'raise') {
     const threeBetRange = late || position.group === 'blinds' ? THREEBET_LATE : THREEBET;
@@ -118,8 +137,27 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
     if (inRange(cls, threeBetRange)) {
       return result('raise', threeBetSize, `${cls} — одна из лучших рук, повышай снова (3-бет).`);
     }
+    // Маленькие и средние пары: ловим сет, если стеки глубокие.
+    if (isPair && inRange(cls, '22-JJ')) {
+      const need = inPosition ? SET_MINING_IN_POSITION : SET_MINING_OUT_OF_POSITION;
+      if (implied(cost) >= need) {
+        return result('call', raiseTo, `Ловим сет: он приходит раз из 8,5, а стек в ${Math.floor(implied(cost))} раз больше цены колла — попадёшь, выиграешь много.`);
+      }
+      if (inRange(cls, '77-JJ') && raiseBB <= 4.5) {
+        return result('call', raiseTo, `${cls} достаточно сильна, чтобы уравнять, но стек маловат, чтобы играть «на сет».`);
+      }
+      return result('fold', 0, `${cls} против повышения играет «на сет», а для этого стек должен быть хотя бы в ${need} раз больше цены колла (сейчас в ${Math.floor(implied(cost))}).`);
+    }
+    // Одномастные связки и тузы: дёшево, в позиции или на ББ, при глубоких стеках.
+    if (inRange(cls, SPECULATIVE) && raiseBB <= 4 && (late || isBB) && implied(cost) >= SPECULATIVE_IMPLIED) {
+      return result('call', raiseTo, `${cls} — рука «на попадание»: колл дешёвый, стеки глубокие, а флеш или стрит выиграют большой банк.`);
+    }
+    // ББ против минимального повышения: цена очень хорошая, защищаем примерно половину рук.
+    if (isBB && raiseBB <= 2.5 && topClasses(0.5).has(cls)) {
+      return result('call', raiseTo, `Повысили минимально: доплатить ${chips(cost)}, а банк уже больше — с ${cls} защищай большой блайнд.`);
+    }
     const callRange = raiseBB > 4.5 ? CALL_BIG : CALL_SMALL;
-    if (inRange(cls, callRange) || (isBB && raiseBB <= 3.5 && inRange(cls, CALL_BB_EXTRA))) {
+    if ((inRange(cls, callRange) && !isPair) || (isBB && raiseBB <= 3.5 && inRange(cls, CALL_BB_EXTRA))) {
       return result('call', raiseTo, isBB
         ? `${cls}: часть ставки уже в банке, цена колла хорошая.`
         : `${cls} неплохо играет против повышения, но для 3-бета слабовата.`);
@@ -133,6 +171,9 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
     }
     if (inRange(cls, CALL_3BET)) {
       return result('call', raiseTo, `${cls} достаточно сильна, чтобы уравнять 3-бет, но не для 4-бета.`);
+    }
+    if (isPair && inRange(cls, '77-TT') && implied(cost) >= 20) {
+      return result('call', raiseTo, `Против 3-бета ${cls} — только «на сет»: стек в ${Math.floor(implied(cost))} раз больше цены, это допустимо.`);
     }
     return result('fold', 0, `Против повторного повышения ${cls} лучше сбросить.`);
   }

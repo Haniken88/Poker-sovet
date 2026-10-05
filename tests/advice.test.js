@@ -37,8 +37,10 @@ test('позиции за столом', () => {
   assert.throws(() => positionInfo(11, 0), /от 2 до 10/);
 });
 
+// По умолчанию стек 100 больших блайндов — обычная игра.
 const pre = (hand, players, offset, extra = {}) =>
-  preflopAdvice({ hero: cards(hand), position: positionInfo(players, offset), ...extra });
+  preflopAdvice({ hero: cards(hand), position: positionInfo(players, offset),
+    stack: 100 * (extra.bigBlind ?? 1), ...extra });
 
 test('префлоп: открытие зависит от позиции', () => {
   assert.equal(pre('As Ah', 9, 3).action, 'raise');
