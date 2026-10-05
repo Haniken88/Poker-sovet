@@ -16,3 +16,6 @@ export function cardFromString(text) {
 }
 
 export const cardToString = (card) => RANKS[rankOf(card) - 2] + SUITS[suitOf(card)];
+
+// Несколько карт через пробел: "As Kd Th".
+export const parseCards = (text) => text.trim().split(/\s+/).map(cardFromString);
