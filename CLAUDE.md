@@ -70,5 +70,5 @@
 - Офлайн: sw.js — сначала сеть, без связи кэш. При добавлении нового файла приложения — дописать его
   в список FILES в sw.js и поднять CACHE (poker-v1 → v2).
 - Шрифты Prata и Manrope лежат в fonts/ (Google Fonts, OFL) — внешних запросов нет.
-- Деплой: GitHub Pages из ветки main, корень. Сайт: https://haniken88.github.io/poker/ ,
-  репозиторий github.com/Haniken88/poker (публичный). Обновить = git push.
+- Деплой: GitHub Pages из ветки main, корень. Сайт: https://haniken88.github.io/Poker-sovet/ ,
+  репозиторий github.com/Haniken88/Poker-sovet (публичный). Обновить = git push.
