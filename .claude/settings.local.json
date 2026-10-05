@@ -1,0 +1,6 @@
+{
+  "skillOverrides": {
+    "supabase-postgres-best-practices": "off",
+    "vercel-react-best-practices": "off"
+  }
+}
