@@ -1,0 +1,17 @@
+{
+  "name": "Покер · совет",
+  "short_name": "Покер-совет",
+  "description": "Подсказчик для техасского холдема: позиция, шансы и совет на каждой улице.",
+  "lang": "ru",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f1a14",
+  "theme_color": "#0f1a14",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

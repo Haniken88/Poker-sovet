@@ -1,0 +1,20 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../fonts/fonts.css">
+<style>
+  html, body { margin: 0; width: 512px; height: 512px; overflow: hidden; }
+  .bg { position: absolute; inset: 0; background: radial-gradient(circle at 50% 38%, #1d8457, #12573a 50%, #0a3323); }
+  .bg::after { content: ''; position: absolute; inset: 34px; border-radius: 120px; border: 3px solid rgba(216,178,90,.35); }
+  .card { position: absolute; top: 118px; width: 168px; height: 236px; border-radius: 20px; background: #f5eedc;
+          box-shadow: 0 14px 30px rgba(0,0,0,.45); display: grid; align-content: center; justify-items: center;
+          font-family: Prata; line-height: 1; }
+  .card b { font-weight: 400; font-size: 104px; } .card i { font-style: normal; font-size: 78px; margin-top: 4px; }
+  .a { left: 102px; transform: rotate(-10deg); color: #1d150c; }
+  .k { left: 236px; transform: rotate(9deg); color: #b3242f; }
+  .chip { position: absolute; left: 330px; top: 318px; width: 104px; height: 104px; border-radius: 50%; background: #f5eedc;
+          border: 8px solid #d8b25a; box-sizing: border-box; display: grid; place-items: center; font: 400 56px Prata; color: #1d150c;
+          box-shadow: 0 10px 20px rgba(0,0,0,.5); }
+</style></head>
+<body><div class="bg"></div>
+<div class="card a"><b>A</b><i>♠</i></div><div class="card k"><b>K</b><i>♥</i></div>
+<div class="chip">D</div></body></html>

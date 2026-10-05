@@ -375,3 +375,8 @@ function render() {
 
 buildTable();
 render();
+
+// Офлайн-режим (на localhost не включаем, чтобы при разработке не мешал кэш).
+if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
+  navigator.serviceWorker.register('sw.js').catch(() => { /* без офлайна тоже работает */ });
+}

@@ -8,9 +8,10 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Покер-совет">
 <title>Покер · совет</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Prata&family=Manrope:wght@500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="fonts/fonts.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -23,7 +24,6 @@
       </button>
     </div>
   </header>
-
   <main>
     <section class="table-wrap" id="table" aria-label="Стол">
       <div class="rail"><div class="felt"></div></div>
@@ -33,7 +33,6 @@
       </div>
     </section>
     <p class="hint">Нажми на место: ты, кнопка, пусто · <b>D</b> можно тянуть пальцем</p>
-
     <section class="hand">
       <div class="hero-cards" id="hero-cards"></div>
       <div class="hero-info">
@@ -41,15 +40,11 @@
         <button class="new-hand" id="new-hand">Новая раздача</button>
       </div>
     </section>
-
     <section class="inputs" id="inputs"></section>
   </main>
-
   <aside class="ticket" id="ticket" aria-live="polite"></aside>
-
   <div class="dim" id="dim"></div>
   <div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
-
   <script type="module" src="app.js"></script>
 </body>
 </html>
