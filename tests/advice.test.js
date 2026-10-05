@@ -96,8 +96,8 @@ test('постфлоп: дро уравнивает только по хорош
   // на тёрне снова придётся платить.
   assert.equal(post('Js Ts', 'As 7s 2d', { pot: 20, toCall: 20, preflopAction: 'raise' }).action, 'call');
   assert.equal(post('Js Ts', 'As 7s 2d', { pot: 20, toCall: 60, preflopAction: 'raise' }).action, 'fold');
-  // Тот же ва-банк последними деньгами — уже колл: дальше платить не придётся.
-  assert.equal(post('Js Ts', 'As 7s 2d', { pot: 20, toCall: 60, stack: 60, preflopAction: 'raise' }).action, 'allin');
+  // Ва-банк в размер банка последними деньгами — колл: дальше платить не придётся.
+  assert.equal(post('Js Ts', 'As 7s 2d', { pot: 20, toCall: 20, stack: 20, preflopAction: 'raise' }).action, 'allin');
 });
 
 test('постфлоп: совет приходит быстро', () => {
@@ -133,17 +133,22 @@ test('проценты у краёв — с десятыми', async () => {
 });
 
 // Раздачи владельца, на которых старая модель ошибалась (2026-10-05).
-test('AA на K-K-8-4-2 против большой ставки — колл, а не пас с 32 %', () => {
-  const r = post('Ac Ah', '4d Kc Kd 8s 2c', { pot: 250, toCall: 1000, opponents: 2 });
-  assert.equal(r.action, 'call');
-  assert.ok(r.equity > 0.45 && r.equity < 0.75, `шанс ${r.equity}`);
+test('AA на K-K-8-4-2: против ставки в банк — колл, против ставки в 4 банка — пас', () => {
+  const pot = post('Ac Ah', '4d Kc Kd 8s 2c', { pot: 1000, toCall: 1000, opponents: 1 });
+  assert.equal(pot.action, 'call');
+  assert.ok(pot.equity > 0.4, `шанс ${pot.equity}`);
+  // Огромной ставкой обычно ставят сильную руку (короля или фулл-хаус).
+  assert.equal(post('Ac Ah', '4d Kc Kd 8s 2c', { pot: 250, toCall: 1000, opponents: 2 }).action, 'fold');
 });
 
-test('QQ на A-8-8-4-2 против одного — колл; шанс точно не 1 %', () => {
-  const r = post('Qh Qd', '4d Ad 8c 8s 2c', { pot: 750, toCall: 500, opponents: 1 });
-  assert.equal(r.action, 'call');
-  assert.ok(r.equity > 0.3, `шанс ${r.equity}`);
-  assert.ok(r.randomEquity > 0.7, `против случайных ${r.randomEquity}`);
+test('QQ на A-8-8-4-2: решение зависит от того, как блефует соперник, и приложение это говорит', () => {
+  const normal = post('Qh Qd', '4d Ad 8c 8s 2c', { pot: 750, toCall: 500, opponents: 1 });
+  assert.ok(normal.equity > 0.1, `шанс ${normal.equity}`); // было 1 %
+  assert.ok(normal.randomEquity > 0.7, `против любых рук ${normal.randomEquity}`);
+  assert.equal(normal.action, 'fold');
+  assert.match(normal.reason, /часто блефует — колл/);
+  const often = post('Qh Qd', '4d Ad 8c 8s 2c', { pot: 750, toCall: 500, opponents: 1, style: 'often' });
+  assert.equal(often.action, 'call');
 });
 
 test('префлоп: шанс считается против тех, кто играет, а не против всего стола', async () => {

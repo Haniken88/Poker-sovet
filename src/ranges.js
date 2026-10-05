@@ -51,19 +51,46 @@ export function hasSomething(a, b, board) {
 const popcount = (n) => { let c = 0; while (n) { c += n & 1; n >>= 1; } return c; };
 
 /**
- * Доля блефа в ставке. По теории (ставка b в долях банка) блефов b / (1 + 2b):
- * полбанка — 25 %, банк — 33 %, два банка — 40 %. Живые игроки блефуют реже —
- * берём 3/4 от теории.
+ * Доля блефа в ставке — зависит от того, как играет соперник (это выбирает игрок:
+ * за столом видно, кто блефует). Ставка тут почти ни при чём: живые игроки огромными
+ * ставками (больше полутора банков) блефуют ещё реже.
  */
-export const bluffShare = (betToPot) => 0.75 * (betToPot / (1 + 2 * betToPot));
+export const BLUFF_STYLE = { rare: 0.08, normal: 0.2, often: 0.35 };
+export const bluffShare = (betToPot, style = 'normal') =>
+  (BLUFF_STYLE[style] ?? BLUFF_STYLE.normal) * (betToPot > 1.5 ? 0.75 : 1);
+
+/**
+ * Руки, которыми ставят «по делу». Чем больше ставка, тем сильнее нужна рука:
+ * до полбанка — лучшие 55 % его рук на этом столе, до банка — 40 %, больше — 22 %.
+ * До ривера к ним добавляются дро (флеш-дро, стрит-дро), если ставка не больше банка.
+ */
+export function valueHands(pre, board, betToPot) {
+  const top = betToPot <= 0.5 ? 0.55 : betToPot <= 1.2 ? 0.4 : 0.22;
+  const scored = pre.map((combo) => ({ combo, v: evaluate([combo[0], combo[1], ...board]) }))
+    .sort((x, y) => y.v - x.v);
+  const cut = scored[Math.max(0, Math.ceil(scored.length * top) - 1)]?.v ?? 0;
+  const strong = scored.filter((x) => x.v >= cut).map((x) => x.combo);
+  if (board.length === 5 || betToPot > 1.2) return strong;
+  const inStrong = new Set(strong.map(([a, b]) => a * 52 + b));
+  const draws = pre.filter(([a, b]) => !inStrong.has(a * 52 + b) && isDraw(a, b, board));
+  return strong.concat(draws);
+}
+
+// Флеш-дро или стрит-дро (без готовой пары).
+function isDraw(a, b, board) {
+  const ranks = board.map(rankOf);
+  if (rankOf(a) === rankOf(b) || ranks.includes(rankOf(a)) || ranks.includes(rankOf(b))) return false;
+  return hasSomething(a, b, board);
+}
 
 /**
  * Диапазоны соперников после флопа.
  * preflopAction — что было префлоп; bet — ставка соперника на этой улице (0 — не ставили);
- * potBefore — банк до этой ставки. Первый соперник — тот, кто поставил.
+ * potBefore — банк до этой ставки, style — как блефует соперник (rare/normal/often).
+ * Первый соперник — тот, кто поставил.
  * Возвращает { ranges, value } — value: диапазон ставящего только «по делу» (без блефов).
  */
-export function opponentRanges({ board, opponents, preflopAction = 'none', bet = 0, potBefore = 0 }) {
+export function opponentRanges({ board, opponents, preflopAction = 'none', bet = 0, potBefore = 0, style = 'normal' }) {
   const aggressorShare = preflopAction === '3bet' ? PREFLOP_SHARE.threeBettor
     : preflopAction === 'raise' ? PREFLOP_SHARE.raiser : PREFLOP_SHARE.open;
   const otherShare = preflopAction === 'raise' || preflopAction === '3bet' ? PREFLOP_SHARE.caller : PREFLOP_SHARE.open;
@@ -76,11 +103,12 @@ export function opponentRanges({ board, opponents, preflopAction = 'none', bet =
   for (let p = 0; p < opponents; p++) {
     const pre = p === 0 ? aggressor : others;
     if (p === 0 && bet > 0) {
-      const strong = pre.filter(([a, b]) => hasSomething(a, b, board));
+      const betToPot = bet / Math.max(potBefore, 1e-9);
+      const strong = valueHands(pre, board, betToPot);
       // Блефуют чаще всего тем, что не попало: из более широкого набора рук.
       const air = combosIn(topClasses(Math.max(aggressorShare, PREFLOP_SHARE.open)))
         .filter(([a, b]) => !hasSomething(a, b, board));
-      const bluff = bluffShare(bet / Math.max(potBefore, 1e-9));
+      const bluff = bluffShare(betToPot, style);
       ranges.push({ groups: [strong, air], weights: [1 - bluff, bluff] });
       value = [plain(strong)];
     } else {

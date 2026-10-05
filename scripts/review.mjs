@@ -53,8 +53,10 @@ const POSTFLOP = [
   ['Ривер: натсовый флеш, ставка', 'Ah 5h', 'Kh 9h 2c 7h Js', 40, 20, 1, 'raise', 160, 'raise|allin'],
   ['Ривер: младшая пара, огромная ставка', '3s 3d', 'Kh 9c 7d 5s 2h', 40, 80, 1, 'raise', 160, 'fold'],
   ['Ривер: старшая пара, маленькая ставка', 'Kd Qc', 'Kh 9c 7d 5s 2h', 40, 10, 1, 'raise', 160, 'call|raise'],
-  ['Ривер: AA на K-K-8-4-2 (твоя раздача)', 'Ac Ah', '4d Kc Kd 8s 2c', 250, 1000, 2, 'none', 20000, 'call'],
-  ['Ривер: QQ на A-8-8-4-2, один (твоя)', 'Qh Qd', '4d Ad 8c 8s 2c', 750, 500, 1, 'none', 20000, 'call'],
+  ['Ривер: AA на K-K-8-4-2, ставка в 4 банка (твоя)', 'Ac Ah', '4d Kc Kd 8s 2c', 250, 1000, 2, 'none', 20000, 'fold'],
+  ['Ривер: AA на K-K-8-4-2, ставка в банк', 'Ac Ah', '4d Kc Kd 8s 2c', 1000, 1000, 1, 'none', 20000, 'call'],
+  ['Ривер: AA на K-K-8-4-2, ставка в полбанка', 'Ac Ah', '4d Kc Kd 8s 2c', 1000, 500, 1, 'none', 20000, 'call'],
+  ['Ривер: QQ на A-8-8-4-2, один (твоя) — зависит от блефа', 'Qh Qd', '4d Ad 8c 8s 2c', 750, 500, 1, 'none', 20000, 'fold|call'],
   ['Тёрн: две пары, ставка, трое в игре', 'Ks 9s', 'Kh 9c 4d 2s', 30, 20, 3, 'none', 170, 'raise|call'],
   ['Старшая пара, хороший кикер, трое, чек', 'As Qd', 'Qh 8c 3d', 12, 0, 3, 'none', 194, 'bet'],
   ['Короткий стек: старшая пара, ставка', 'As Kd', 'Kh 8c 3d', 40, 20, 1, 'raise', 30, 'allin'],
@@ -89,7 +91,7 @@ POSTFLOP.forEach(([title, hand, board, pot, bet, opp, pre, stack, want], i) => {
   const a = postflopAdvice({ hero: parseCards(hand), board: parseCards(board), pot, toCall: bet, opponents: opp,
     preflopAction: pre, stack, iterations: 30000, random });
   const good = ok(a.action, want); if (!good) bad++;
-  console.log(`| ${PREFLOP.length + i + 1} | ${title} | ${hand} · ${board} | ${pot} / ${bet || '—'} | **${a.text}** | ${pct(a.equity)} (${pct(a.randomEquity)}) | ${wantText(want)} | ${good ? '✅' : '❌'} |`);
+  console.log(`| ${PREFLOP.length + i + 1} | ${title} | ${hand} · ${board} | ${pot} / ${bet || '—'} | **${a.text}**${/Но если/.test(a.reason) ? ` (${a.reason.split('Но ')[1].replace('.', '')})` : ''} | ${pct(a.equity)} (${pct(a.randomEquity)}) | ${wantText(want)} | ${good ? '✅' : '❌'} |`);
 });
 console.log(`\nНе совпало с ожиданием: ${bad} из ${PREFLOP.length + POSTFLOP.length}`);
 process.exitCode = bad ? 1 : 0;

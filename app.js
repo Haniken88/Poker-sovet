@@ -22,6 +22,7 @@ const state = {
   button: saved.button || 2,
   bb: saved.bb || 2,
   stack: saved.stack || 0, // 0 — не указан
+  style: saved.style || 'normal', // как блефует поставивший соперник
   hole: [null, null],
   board: [null, null, null, null, null],
   preflop: 'none', limpers: 1, raiseTo: 0,
@@ -30,7 +31,7 @@ const state = {
 const persist = () => {
   try {
     localStorage.setItem('poker-table', JSON.stringify(
-      { occupied: state.occupied, hero: state.hero, button: state.button, bb: state.bb, stack: state.stack }));
+      { occupied: state.occupied, hero: state.hero, button: state.button, bb: state.bb, stack: state.stack, style: state.style }));
   } catch { /* приватный режим — просто не запоминаем */ }
 };
 
@@ -275,9 +276,14 @@ function renderInputs() {
       render();
     };
   } else {
+    const styles = [['rare', 'Редко блефует'], ['normal', 'Обычно'], ['often', 'Часто блефует']];
     box.innerHTML = `<div class="steppers">
       ${stepper('toCall', 'Соперник поставил', state.bb)}
-      ${stepper('opponents', 'Соперников в игре', 1, 1, others)}</div>`;
+      ${stepper('opponents', 'Соперников в игре', 1, 1, others)}</div>
+      ${state.toCall ? `<div><div class="label">Как играет поставивший</div>
+        <div class="segments">${styles.map(([k, t]) => `<button data-style="${k}" aria-pressed="${state.style === k}">${t}</button>`).join('')}</div>
+        <div class="explain">Не знаешь — оставь «Обычно». Большой ставкой обычно ставят сильную руку.</div></div>` : ''}`;
+    for (const b of box.querySelectorAll('[data-style]')) b.onclick = () => { state.style = b.dataset.style; persist(); render(); };
   }
   bindSteppers(box);
 }
@@ -353,7 +359,7 @@ function renderTicket() {
     } else {
       const board = state.board.filter((c) => c !== null);
       advice = postflopAdvice({ hero, board, opponents: state.opponents, pot: state.pot,
-        toCall: state.toCall, preflopAction: state.preflop, stack: stackOrInf(), iterations: 6000 });
+        toCall: state.toCall, preflopAction: state.preflop, stack: stackOrInf(), style: state.style, iterations: 6000 });
       equity = advice.equity;
       gaugeNote = `против любых рук: ${percentText(advice.randomEquity)} %`;
       const price = Math.min(state.toCall, stackOrInf());

@@ -102,16 +102,17 @@ export function whoBeatsYou(hero, board) {
  * pot — банк в центре стола (без ставок этой улицы),
  * toCall — сколько поставил соперник на этой улице (0 = ставок не было),
  * preflopAction — что было префлоп ('none'/'limp'/'raise'/'3bet'),
- * stack — сколько у тебя осталось денег (Infinity = не важно).
+ * stack — сколько у тебя осталось денег (Infinity = не важно),
+ * style — как блефует поставивший: 'rare' (редко), 'normal', 'often' (часто).
  * Возвращает { action, amount, text, reason, equity, randomEquity, handName, draws }.
  */
 export function postflopAdvice({
-  hero, board, opponents = 1, pot, toCall = 0, preflopAction = 'none', stack = Infinity,
-  iterations = 8000, random = Math.random,
+  hero, board, opponents = 1, pot, toCall = 0, preflopAction = 'none', stack = Infinity, style = 'normal',
+  iterations = 8000, random = Math.random, compareStyles = true,
 }) {
   if (board.length < 3 || board.length > 5) throw new Error('На столе должно быть 3, 4 или 5 карт');
   const bet = toCall;
-  const { ranges, value } = opponentRanges({ board, opponents, preflopAction, bet, potBefore: pot });
+  const { ranges, value } = opponentRanges({ board, opponents, preflopAction, bet, potBefore: pot, style });
   const { equity } = calcEquity({ hero, board, opponents, ranges, iterations, random });
   const randomEquity = calcEquity({ hero, board, opponents, iterations: Math.round(iterations / 3), random }).equity;
   const handName = describeHand(hero, board);
@@ -151,20 +152,30 @@ export function postflopAdvice({
   // Повышаем, только если впереди даже против рук, которыми ставят «по делу» (без блефов).
   const vsValue = calcEquity({ hero, board, opponents, ranges: value ? [...value, ...ranges.slice(1)] : ranges,
     iterations: Math.round(iterations / 2), random }).equity;
-  if (vsValue >= Math.max(valueNeed, 0.55) && price < stack) {
+  // На ривере повышение уравняют только руки получше — нужен запас побольше.
+  if (vsValue >= Math.max(valueNeed, river ? 0.7 : 0.55) && price < stack) {
     return result('raise', bet * 3, `Ты впереди даже против рук, которыми так ставят без блефа (${percentText(vsValue)} %), — повышай втрое.`);
   }
   // На флопе впереди ещё ставки: дро без готовой пары реализует шанс не полностью
   // (на тёрне снова придётся платить). При ва-банке ставок больше не будет — без поправки.
   const madeHand = categoryOf(evaluate([...hero, ...board])) >= CATEGORY.PAIR && !describeHand(hero, board).includes('на столе');
-  const realized = board.length === 3 && !madeHand && price < stack ? equity * 0.8 : equity;
+  const realized = board.length === 3 && !madeHand && price < stack ? equity * 0.87 : equity;
+  // Решение зависит от того, как блефует соперник? Скажем об этом прямо.
+  const flip = (other) => {
+    if (!compareStyles || style === other) return null;
+    const alt = postflopAdvice({ hero, board, opponents, pot, toCall, preflopAction, stack, style: other,
+      iterations: Math.round(iterations / 2), random, compareStyles: false });
+    return alt.action;
+  };
   if (realized >= potOdds) {
-    const bluffNote = river && categoryOf(evaluate([...hero, ...board])) >= CATEGORY.PAIR
-      ? ' Часть таких ставок — блеф, его ты бьёшь.' : '';
-    return result('call', price, `Шанс ${percent} %, а колл требует ${need} % — уравнивать выгодно.${bluffNote}`);
+    const rare = flip('rare');
+    const note = rare === 'fold' ? ' Но если он почти не блефует — пас.' : '';
+    return result('call', price, `Шанс ${percent} %, а колл требует ${need} % — уравнивать выгодно.${note}`);
   }
   if (realized < equity && equity >= potOdds) {
     return result('fold', 0, `Шанс ${percent} %, но это до ривера, а на тёрне снова придётся платить: дро стоит около ${percentText(realized)} %, колл требует ${need} %.`);
   }
-  return result('fold', 0, `Шанс ${percent} %, а колл требует ${need} % — в долгую это убыточно.`);
+  const often = flip('often');
+  const note = often === 'call' || often === 'allin' ? ' Но если он часто блефует — колл.' : '';
+  return result('fold', 0, `Шанс ${percent} %, а колл требует ${need} % — в долгую это убыточно.${note}`);
 }
