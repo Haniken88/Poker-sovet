@@ -240,7 +240,8 @@ const fmt = (n) => String(Math.round(n * 10) / 10).replace('.', ',');
 const parseNum = (s) => { const n = parseFloat(String(s).replace(',', '.')); return Number.isFinite(n) && n >= 0 ? n : 0; };
 
 function stepper(key, name, step, min = 0, max = 100000) {
-  return `<label class="stepper"><span class="name">${name}</span>
+  const blinds = ['raiseTo', 'pot', 'toCall'].includes(key) && state[key] ? ` · ${inBlinds(state[key])}` : '';
+  return `<label class="stepper"><span class="name">${name}${blinds}</span>
     <input class="value" inputmode="decimal" data-key="${key}" value="${fmt(state[key])}" aria-label="${name}">
     <span class="btns"><button type="button" data-key="${key}" data-step="${-step}" data-min="${min}" data-max="${max}" aria-label="Меньше">−</button><button type="button" data-key="${key}" data-step="${step}" data-min="${min}" data-max="${max}" aria-label="Больше">+</button></span></label>`;
 }
@@ -334,26 +335,35 @@ function renderTicket() {
   }, 30);
 }
 
-// Сколько фишек класть — простыми словами, без «рейз до».
+// Сколько ставить — в больших блайндах и сразу в деньгах: «3 больших блайнда — это 600».
+const roundToSB = (n) => Math.max(state.bb / 2, Math.round(n / (state.bb / 2)) * (state.bb / 2));
+function inBlinds(n) {
+  const x = Math.round((n / state.bb) * 10) / 10;
+  const whole = Number.isInteger(x);
+  const last = x % 10, last2 = x % 100;
+  const word = !whole ? 'больших блайнда'
+    : last === 1 && last2 !== 11 ? 'большой блайнд'
+    : last >= 2 && last <= 4 && (last2 < 12 || last2 > 14) ? 'больших блайнда' : 'больших блайндов';
+  return `${fmt(x)} ${word}`;
+}
+
 function howMuch(advice, preflop, heroPos) {
-  const amount = advice.amount;
+  const amount = roundToSB(advice.amount);
   // Префлоп блайнды уже лежат на столе — их не докладывают второй раз.
   const posted = preflop ? (heroPos.key === 'BB' ? state.bb : heroPos.key === 'SB' ? state.bb / 2 : 0) : 0;
-  const bbs = (n) => `${fmt(n / state.bb)} ББ`;
-  const blind = posted ? ` Блайнд ${fmt(posted)} уже на столе — доложи <b>${fmt(amount - posted)}</b>.` : '';
+  const blind = posted ? ` Твой блайнд ${fmt(posted)} уже на столе — доложи <b>${fmt(amount - posted)}</b>.` : '';
   switch (advice.action) {
     case 'raise': {
       const theirs = preflop ? (state.preflop === 'none' ? 0 : state.preflop === 'limp' ? state.bb : state.raiseTo) : state.toCall;
-      const more = theirs ? `: у соперника ${fmt(theirs)}, у тебя на ${fmt(amount - theirs)} больше` : '';
       return { title: `Рейз: ${fmt(amount)}`,
-        chips: `Твоя ставка всего — <b>${fmt(amount)}</b>${preflop ? ` (${bbs(amount)})` : ''}${more}.${blind}` };
+        chips: `Ставь ${inBlinds(amount)} — это <b>${fmt(amount)}</b> всего${theirs ? ` (у соперника ${fmt(theirs)})` : ''}.${blind}` };
     }
     case 'bet':
-      return { title: `Ставка: ${fmt(amount)}`, chips: `Поставь <b>${fmt(amount)}</b>.` };
+      return { title: `Ставка: ${fmt(amount)}`, chips: `Ставь ${inBlinds(amount)} — это <b>${fmt(amount)}</b>.` };
     case 'call': {
       const add = amount - posted;
       return { title: `Колл: ${fmt(add)}`,
-        chips: `Доложи <b>${fmt(add)}</b>, чтобы сравняться с соперником.${posted ? ` (Блайнд ${fmt(posted)} уже на столе.)` : ''}` };
+        chips: `Доложи ${inBlinds(add)} — это <b>${fmt(add)}</b>, столько же, сколько у соперника.${posted ? ` (Твой блайнд ${fmt(posted)} уже на столе.)` : ''}` };
     }
     default:
       return { title: advice.text, chips: '' };
