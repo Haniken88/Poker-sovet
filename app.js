@@ -322,14 +322,42 @@ function renderTicket() {
       const draws = advice.draws.names.length ? ` · ${advice.draws.names.join(', ')}, ${advice.draws.outs} аутов` : '';
       lines = [`<b>${advice.handName}</b>${draws}${need}`, advice.reason];
     }
+    const { title, chips } = howMuch(advice, count === 0, heroPos);
+    if (chips) lines.unshift(chips);
     ticket.classList.remove('busy');
     ticket.innerHTML = `
       <div class="top-row">
-        <div class="act ${advice.action === 'fold' ? 'fold' : ''}"><small>Совет</small>${advice.text.replace(/(\d)\.(\d)/, '$1,$2')}</div>
+        <div class="act ${advice.action === 'fold' ? 'fold' : ''}"><small>Совет</small>${title}</div>
         <div class="gauge"><b>${Math.round(equity * 100)}%</b><span>шанс выиграть</span></div>
       </div>
       <hr>${lines.map((l) => `<div class="line">${l}</div>`).join('')}`;
   }, 30);
+}
+
+// Сколько фишек класть — простыми словами, без «рейз до».
+function howMuch(advice, preflop, heroPos) {
+  const amount = advice.amount;
+  // Префлоп блайнды уже лежат на столе — их не докладывают второй раз.
+  const posted = preflop ? (heroPos.key === 'BB' ? state.bb : heroPos.key === 'SB' ? state.bb / 2 : 0) : 0;
+  const bbs = (n) => `${fmt(n / state.bb)} ББ`;
+  const blind = posted ? ` Блайнд ${fmt(posted)} уже на столе — доложи <b>${fmt(amount - posted)}</b>.` : '';
+  switch (advice.action) {
+    case 'raise': {
+      const theirs = preflop ? (state.preflop === 'none' ? 0 : state.preflop === 'limp' ? state.bb : state.raiseTo) : state.toCall;
+      const more = theirs ? `: у соперника ${fmt(theirs)}, у тебя на ${fmt(amount - theirs)} больше` : '';
+      return { title: `Рейз: ${fmt(amount)}`,
+        chips: `Твоя ставка всего — <b>${fmt(amount)}</b>${preflop ? ` (${bbs(amount)})` : ''}${more}.${blind}` };
+    }
+    case 'bet':
+      return { title: `Ставка: ${fmt(amount)}`, chips: `Поставь <b>${fmt(amount)}</b>.` };
+    case 'call': {
+      const add = amount - posted;
+      return { title: `Колл: ${fmt(add)}`,
+        chips: `Доложи <b>${fmt(add)}</b>, чтобы сравняться с соперником.${posted ? ` (Блайнд ${fmt(posted)} уже на столе.)` : ''}` };
+    }
+    default:
+      return { title: advice.text, chips: '' };
+  }
 }
 
 // ---------- Твоя рука ----------
@@ -354,8 +382,8 @@ $('new-hand').onclick = () => {
 $('settings-btn').onclick = () => {
   openSheet(`
     <h2>Блайнды<button data-act="close">Готово</button></h2>
-    <div class="steppers">${stepper('bb', 'Большой блайнд (в фишках)', 1, 1)}</div>
-    <p class="note">Все суммы (рейзы, банк, ставки) — в тех же фишках. Малый блайнд — половина большого.</p>`);
+    <div class="steppers">${stepper('bb', 'Большой блайнд', 1, 1)}</div>
+    <p class="note">Суммы — в деньгах стола (евро, рубли — как у вас), не в штуках фишек. Например, игра 1/2: малый блайнд 1, большой 2. Рейзы, банк и ставки вводи в тех же деньгах.</p>`);
   sheet.querySelector('[data-act="close"]').onclick = closeSheet;
   for (const b of sheet.querySelectorAll('button[data-step]')) b.onclick = () => {
     state.bb = Math.max(1, state.bb + Number(b.dataset.step));

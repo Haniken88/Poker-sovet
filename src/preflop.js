@@ -41,7 +41,7 @@ const chips = (amount) => Math.round(amount * 10) / 10;
  * action — что было до тебя: 'none' (все сбросили или ты первый), 'limp',
  *   'raise' (одно повышение), '3bet' (повышение на повышение);
  * limpers — сколько игроков уравняли блайнд; raiseTo — до скольки повысили;
- * bigBlind — размер большого блайнда (все суммы в тех же фишках).
+ * bigBlind — размер большого блайнда (все суммы в тех же деньгах).
  * Возвращает { action, amount, text, reason, hand }.
  */
 export function preflopAdvice({ hero, position, action = 'none', limpers = 0, raiseTo = 0, bigBlind = 1 }) {
