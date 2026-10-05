@@ -64,5 +64,6 @@ export function placeSeats(table, { chipAt = 0.32, render, dealer }) {
   table.appendChild(chip);
 }
 
-export const picker = new URLSearchParams(location.search).has('picker');
-if (picker) document.documentElement.classList.add('show-picker');
+// ?picker или ?picker=1/2/3 — показать окно выбора карты (вариант 1–3).
+const pickerParam = new URLSearchParams(location.search).get('picker');
+if (pickerParam !== null) document.documentElement.classList.add('show-picker', `picker-${pickerParam || '3'}`);

@@ -78,7 +78,26 @@
   .sheet-dim { display: none; position: fixed; inset: 0; background: rgba(5,10,7,.7); }
   .sheet { display: none; position: fixed; left: 0; right: 0; bottom: 0; background: #16231c;
            border-radius: 24px 24px 0 0; padding: 18px 16px 34px; border-top: 1px solid #2f4637; }
-  .show-picker .sheet-dim, .show-picker .sheet { display: block; }
+  .show-picker .sheet-dim { display: block; }
+  .sheet-dim { z-index: 9; } .sheet { z-index: 10; }
+  .picker-1 .sheet.v1, .picker-2 .sheet.v2, .picker-3 .sheet.v3 { display: block; }
+  .sheet p { color: var(--muted); font-size: 13px; margin: -6px 0 12px; }
+  /* 1: вся колода */
+  .full { display: grid; grid-template-columns: 30px repeat(4, 1fr); gap: 5px; align-items: center; }
+  .full .r { font: 400 18px Prata; color: var(--muted); text-align: center; }
+  .full .k { height: 38px; border-radius: 7px; background: var(--ivory); display: grid; place-items: center; font-size: 20px; }
+  .full .k.used { opacity: .25; } .full .k.sel { outline: 3px solid var(--gold); outline-offset: 1px; }
+  .v1 { top: 150px; overflow: hidden; }
+  /* 2: номинал, потом масть */
+  .ranks { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-bottom: 14px; }
+  .ranks div { height: 54px; border-radius: 10px; background: #0f1a14; border: 1px solid #2f4637; display: grid; place-items: center;
+               font: 400 24px Prata; color: var(--ivory); }
+  .ranks .on { background: var(--ivory); color: #1d150c; border-color: var(--gold); }
+  .suits { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .suits div { height: 84px; border-radius: 12px; background: var(--ivory); display: grid; place-items: center; font-size: 38px; }
+  .suits .used { opacity: .25; }
+  .step { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); margin-bottom: 8px; letter-spacing: .08em; text-transform: uppercase; }
+  .step b { color: var(--gold); }
   .sheet h2 { font: 400 22px Prata; margin-bottom: 12px; }
   .tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 14px; }
   .tabs div { height: 48px; border-radius: 12px; display: grid; place-items: center; font-size: 26px;
@@ -119,7 +138,19 @@
   </div>
 
   <div class="sheet-dim"></div>
-  <div class="sheet">
+  <div class="sheet v1">
+    <h2>Третья карта флопа</h2>
+    <p>Вся колода сразу — одно касание. Занятые карты бледные.</p>
+    <div class="full" id="full"></div>
+  </div>
+  <div class="sheet v2">
+    <h2>Третья карта флопа</h2>
+    <div class="step"><b>1</b> Номинал</div>
+    <div class="ranks" id="ranks"></div>
+    <div class="step"><b>2</b> Масть</div>
+    <div class="suits"><div class="suit-s">♠</div><div class="suit-h">♥</div><div class="suit-d used">♦</div><div class="suit-c">♣</div></div>
+  </div>
+  <div class="sheet v3">
     <h2>Третья карта флопа</h2>
     <div class="tabs"><div class="suit-s">♠</div><div class="on">♥</div><div class="suit-d" style="color:var(--red)">♦</div><div class="suit-c">♣</div></div>
     <div class="deck" id="deck"></div>
@@ -134,6 +165,12 @@
   document.getElementById('mine').innerHTML = card('Js', 'big') + card('Ts', 'big');
   document.getElementById('deck').innerHTML = ['A','K','Q','J','T','9','8','7','6','5','4','3','2']
     .map((r) => card(r + 'h')).join('');
+  const used = ['As', '7s', '2d', 'Js', 'Ts'], SYM = { s: '♠', h: '♥', d: '♦', c: '♣' };
+  document.getElementById('full').innerHTML = ['A','K','Q','J','T','9','8','7','6','5','4','3','2'].map((r) =>
+    `<div class="r">${r === 'T' ? '10' : r}</div>` + ['s','h','d','c'].map((x) =>
+      `<div class="k suit-${x} ${used.includes(r + x) ? 'used' : ''} ${r + x === 'Qh' ? 'sel' : ''}">${SYM[x]}</div>`).join('')).join('');
+  document.getElementById('ranks').innerHTML = ['A','K','Q','J','10','9','8','7','6','5','4','3','2']
+    .map((r) => `<div class="${r === '2' ? 'on' : ''}">${r}</div>`).join('');
 </script>
 </body>
 </html>
