@@ -4,6 +4,26 @@ import { handClass, parseRange } from './hands.js';
 import { rankOf } from './cards.js';
 import { topClasses, combosIn, PREFLOP_SHARE } from './ranges.js';
 import { calcEquity } from './equity.js';
+import { PREFLOP_DATA } from './preflopData.js';
+
+// ---------- Таблицы солверов ----------
+// Места полного стола (9) переводим в места таблиц (6-max): ранние места — как самое раннее (LJ).
+const CHART_POS = ['LJ', 'HJ', 'CO', 'BTN', 'SB', 'BB'];
+export const chartPos = (position) => (CHART_POS.includes(position.key) ? position.key : 'LJ');
+
+// Средние частоты из таблиц: { raise, call, fold } в %, close — источники расходятся или смешивают.
+export function chartLookup(situation, cls) {
+  const sit = PREFLOP_DATA[situation];
+  const row = sit?.hands[cls];
+  if (!row) return null;
+  const [raise, call, close] = row;
+  const fold = Math.max(0, 100 - raise - call);
+  // Сначала «играть или пас», потом «колл или рейз».
+  const top = raise + call > fold ? (raise >= call ? 'raise' : 'call') : 'fold';
+  return { raise, call, fold, top, close: close === 1, sources: sit.sources.length };
+}
+const mix = (v) => `рейз ${v.raise} %, колл ${v.call} %, пас ${v.fold} %`;
+const solvers = (v) => `по таблицам ${v.sources} солверов`;
 
 // Открытие (первым входишь в банк) — по опубликованным таблицам солвера для 100 ББ
 // (Preflop Wizard 9-max/6-max, GTO Gecko). Ключ — сколько игроков ходят после тебя:
@@ -58,7 +78,12 @@ const chips = (amount) => Math.round(amount * 10) / 10;
  * stack — эффективный стек: меньший из твоего и соперника (больше него не выиграешь и не проиграешь).
  * Возвращает { action, amount, text, reason, hand }.
  */
-export function preflopAdvice({ hero, position, action = 'none', limpers = 0, raiseTo = 0, bigBlind = 1, stack = Infinity }) {
+/**
+ * opener — место повысившего (positionInfo), threeBettor — место повысившего второй раз,
+ * heroOpened — первым повышал ты сам (тогда «Повысили ×2» = 3-бет против тебя).
+ */
+export function preflopAdvice({ hero, position, action = 'none', limpers = 0, raiseTo = 0, bigBlind = 1, stack = Infinity,
+  opener = null, threeBettor = null, heroOpened = false }) {
   const cls = handClass(hero[0], hero[1]);
   const bb = bigBlind;
   const late = position.group === 'late';
@@ -102,6 +127,13 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
 
   if (action === 'none') {
     if (isBB) return result('check', 0, 'Все сбросили до тебя — ты уже забрал блайнды.');
+    const v = position.behind <= 5 ? chartLookup(`open:${chartPos(position)}`, cls) : null;
+    if (v) {
+      const opens = v.top === 'raise';
+      return { ...result(opens ? 'raise' : 'fold', opens ? 3 * bb : 0, opens
+        ? `${cls} с этого места открывают: ${solvers(v)} рейз в ${v.raise} % случаев.`
+        : `${cls} с этого места не открывают: ${solvers(v)} рейз только в ${v.raise} % случаев.`), close: v.close };
+    }
     if (inRange(cls, openRange(position.behind))) {
       return result('raise', 3 * bb, `${cls} достаточно сильна, чтобы входить первым с этой позиции.`);
     }
@@ -117,6 +149,34 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
   const implied = (cost) => (cost > 0 ? stack / cost : Infinity);
   const isPair = cls.length === 2;
   const inPosition = position.group !== 'blinds';
+
+  // Ответ на одно повышение по таблицам солверов. null — таблицы для этой пары мест нет.
+  function chartVsOpen() {
+    let heroKey = chartPos(position);
+    const openerKey = opener ? chartPos(opener) : (['LJ', 'HJ'].includes(heroKey) ? 'LJ' : 'HJ');
+    // Оба на ранних местах полного стола: ты — следующий после открывшего.
+    if (heroKey === openerKey || (heroKey === 'LJ' && openerKey !== 'LJ')) heroKey = 'HJ';
+    const v = chartLookup(`vsopen:${heroKey}:${openerKey}`, cls);
+    if (!v) return null;
+    const who = opener ? '' : ' (кто повысил, не отмечено — считаю, что средняя позиция)';
+    const threeBetSize = (position.group === 'blinds' ? 4 : 3) * raiseTo;
+    let act = v.top, close = v.close, note = '';
+    // Таблицы посчитаны для повышения в 2,5–3 ББ. Больше — уравниваем только уверенные коллы.
+    if (act === 'call' && raiseBB > 4 && v.call < 70) { act = 'fold'; close = true; note = ' Повышение крупнее обычного — уравнивать дорого.'; }
+    // Таблицы — для 100 ББ. При стеке меньше 60 ББ коллы ради сета и «на попадание» не окупаются.
+    const speculative = (isPair && inRange(cls, '22-77')) || inRange(cls, SPECULATIVE);
+    if (act === 'call' && speculative && stack / bb < 60) { act = 'fold'; close = true; note = ` Стек меньше 60 ББ: ради сета или флеша уравнивать уже невыгодно — потом мало выиграешь.`; }
+    // Минимальное повышение дешевле, чем в таблицах: руки «на грани» можно уравнять.
+    if (act === 'fold' && raiseBB <= 2.2 && v.raise + v.call >= 25) { act = 'call'; close = true; note = ' Повышение минимальное — дешевле, чем в таблицах, поэтому можно уравнять.'; }
+    // Глубокие стеки (150+ ББ): маленькую пару можно уравнять ради сета — так советуют книги.
+    if (act === 'fold' && isPair && inRange(cls, '22-JJ') && stack / bb >= 150
+      && implied(cost) >= (inPosition ? SET_MINING_IN_POSITION : SET_MINING_OUT_OF_POSITION)) {
+      act = 'call'; close = true; note = ` Стеки очень глубокие — уравнивай ради сета (приходит раз из 8,5).`;
+    }
+    const amount = act === 'raise' ? threeBetSize : act === 'call' ? raiseTo : 0;
+    const head = act === 'raise' ? `${cls} — повышай снова (3-бет).` : act === 'call' ? `${cls} — уравнивай.` : `${cls} против этого повышения сбрасывают.`;
+    return { ...result(act, amount, `${head} По таблицам ${v.sources} солверов: ${mix(v)}.${note}${who}`), close };
+  }
 
   if (action === 'limp') {
     const raiseSize = (3 + limpers) * bb;
@@ -150,8 +210,10 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
   const cost = raiseTo - posted;
 
   if (action === 'raise') {
-    const threeBetRange = late || position.group === 'blinds' ? THREEBET_LATE : THREEBET;
     const threeBetSize = (position.group === 'blinds' ? 4 : 3) * raiseTo;
+    const fromChart = chartVsOpen();
+    if (fromChart) return fromChart;
+    const threeBetRange = late || position.group === 'blinds' ? THREEBET_LATE : THREEBET;
     if (inRange(cls, threeBetRange)) {
       return result('raise', threeBetSize, `${cls} — одна из лучших рук, повышай снова (3-бет).`);
     }
@@ -199,6 +261,17 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
   }
 
   if (action === '3bet') {
+    // Ты открыл, тебе ответили 3-бетом — таблицы «открывший против 3-бетора».
+    if (heroOpened && threeBettor) {
+      const v = chartLookup(`vs3bet:${chartPos(position)}:${chartPos(threeBettor)}`, cls);
+      if (v) {
+        const act = v.top;
+        const text = act === 'raise' ? `${cls} — повышай ещё (4-бет): ${solvers(v)} ${mix(v)}.`
+          : act === 'call' ? `${cls} уравнивает 3-бет: ${solvers(v)} ${mix(v)}.`
+          : `${cls} против 3-бета сбрасывают: ${solvers(v)} ${mix(v)}.`;
+        return { ...result(act, act === 'raise' ? 2.3 * raiseTo : act === 'call' ? raiseTo : 0, text), close: v.close };
+      }
+    }
     if (inRange(cls, FOURBET)) {
       return result('raise', 2.3 * raiseTo, `${cls} — сильнейшая рука, повышай ещё (4-бет).`);
     }

@@ -58,7 +58,9 @@ test('префлоп: против лимперов и повышений', () =
   assert.equal(pre('4s 4d', 9, 0, { action: 'limp', limpers: 2 }).action, 'call'); // доехать до сета
   assert.equal(pre('Ks Kd', 9, 4, { action: 'raise', raiseTo: 3 }).action, 'raise');
   assert.equal(pre('Ks Kd', 9, 4, { action: 'raise', raiseTo: 3 }).amount, 9);
-  assert.equal(pre('8s 8d', 9, 4, { action: 'raise', raiseTo: 3 }).action, 'call');
+  // 88 против открытия: из ранней позиции солверы чаще пасуют (3-бет 41 %, спорно), на баттоне — колл.
+  assert.equal(pre('8s 8d', 9, 4, { action: 'raise', raiseTo: 3 }).close, true);
+  assert.equal(pre('8s 8d', 9, 0, { action: 'raise', raiseTo: 3, opener: positionInfo(9, 8) }).action, 'call');
   assert.equal(pre('Ks 9d', 9, 4, { action: 'raise', raiseTo: 3 }).action, 'fold');
   assert.equal(pre('Ks 9s', 9, 2, { action: 'raise', raiseTo: 3 }).action, 'call'); // ББ защищает шире
   assert.equal(pre('As Ad', 9, 4, { action: '3bet', raiseTo: 9 }).action, 'raise');
@@ -176,4 +178,35 @@ test('ставка не больше стека: почти весь стек �
   const r = post('As Ad', 'Ah 7c 2d', { pot: 100, stack: 80 });
   assert.equal(r.action, 'allin');
   assert.equal(r.amount, 80);
+});
+
+
+// Префлоп по сводным таблицам солверов: приложение выдаёт то же, что таблица, для каждой из 169 рук.
+test('открытие первым совпадает со сводной таблицей солверов (LJ, HJ, CO, BTN, SB)', async () => {
+  const { chartLookup } = await import('../src/preflop.js');
+  const { allClasses } = await import('../src/hands.js');
+  const { makeCard } = await import('../src/cards.js');
+  const R = '23456789TJQKA';
+  const toCards = (cls) => [makeCard(R.indexOf(cls[0]) + 2, 0), makeCard(R.indexOf(cls[1]) + 2, cls.endsWith('s') ? 0 : 1)];
+  for (const [key, offset] of [['LJ', 6], ['HJ', 7], ['CO', 8], ['BTN', 0], ['SB', 1]]) {
+    for (const cls of allClasses()) {
+      const want = chartLookup(`open:${key}`, cls).top;
+      const got = preflopAdvice({ hero: toCards(cls), position: positionInfo(9, offset), stack: 200, bigBlind: 2 }).action;
+      assert.equal(got, want === 'raise' ? 'raise' : 'fold', `${key} ${cls}`);
+    }
+  }
+});
+
+test('ответ на открытие совпадает со сводной таблицей (ББ против баттона, стек 100 ББ)', async () => {
+  const { chartLookup } = await import('../src/preflop.js');
+  const { allClasses } = await import('../src/hands.js');
+  const { makeCard } = await import('../src/cards.js');
+  const R = '23456789TJQKA';
+  const toCards = (cls) => [makeCard(R.indexOf(cls[0]) + 2, 0), makeCard(R.indexOf(cls[1]) + 2, cls.endsWith('s') ? 0 : 1)];
+  for (const cls of allClasses()) {
+    const want = chartLookup('vsopen:BB:BTN', cls).top;
+    const got = preflopAdvice({ hero: toCards(cls), position: positionInfo(9, 2), action: 'raise', raiseTo: 5, bigBlind: 2,
+      stack: 200, opener: positionInfo(9, 0) }).action;
+    assert.equal(got === 'allin' ? 'raise' : got, want, `ББ против BTN: ${cls}`);
+  }
 });
