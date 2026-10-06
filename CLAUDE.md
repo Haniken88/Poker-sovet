@@ -68,7 +68,8 @@
 - Скриншоты как на iPhone с нажатиями: `node scripts/screens.mjs` → mockups/shots/app-*.png
   (Playwright Firefox берётся из /root/My-Site/node_modules). Иконки: `node scripts/make-icons.mjs`.
 - Офлайн: sw.js — сначала сеть, без связи кэш. При добавлении нового файла приложения — дописать его
-  в список FILES в sw.js и поднять CACHE (poker-v1 → v2).
+  в список FILES в sw.js. При КАЖДОМ обновлении поднимать CACHE в sw.js и APP_VERSION в app.js (видна
+  владельцу в настройках) — у владельца однажды висела старая версия из кэша телефона.
 - Шрифты Prata и Manrope лежат в fonts/ (Google Fonts, OFL) — внешних запросов нет.
 - Деплой: GitHub Pages из ветки main, корень. Сайт: https://haniken88.github.io/Poker-sovet/ ,
   репозиторий github.com/Haniken88/Poker-sovet (публичный). Обновить = git push.

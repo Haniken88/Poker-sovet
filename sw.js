@@ -1,6 +1,6 @@
 // Офлайн-режим: сначала пробуем интернет (всегда свежая версия),
 // без связи — берём сохранённую копию из телефона.
-const CACHE = 'poker-v6';
+const CACHE = 'poker-v7';
 const FILES = [
   './', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest',
   'src/cards.js', 'src/evaluator.js', 'src/equity.js', 'src/hands.js', 'src/handRanks.js',
@@ -23,7 +23,8 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET' || new URL(event.request.url).origin !== location.origin) return;
   event.respondWith(
-    fetch(event.request)
+    // cache: 'no-cache' — всегда сверяемся с сайтом, а не берём старую копию из памяти телефона.
+    fetch(event.request, { cache: 'no-cache' })
       .then((response) => {
         if (response.ok) {
           const copy = response.clone();

@@ -5,6 +5,8 @@ import { postflopAdvice, whoBeatsYou, percentText } from './src/postflop.js';
 import { handClass } from './src/hands.js';
 import { GEOMETRY, DEALER_XY, SEAT_XY, SEAT_COUNT, activeSeats, seatPosition, nextActive } from './src/table.js';
 
+// Номер версии — поднимать при каждом обновлении вместе с CACHE в sw.js.
+const APP_VERSION = 7;
 const $ = (id) => document.getElementById(id);
 const RANK_LABEL = { 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
 const rankLabel = (r) => RANK_LABEL[r] || String(r);
@@ -552,7 +554,8 @@ function openSettings() {
     <p class="note">Суммы — в деньгах стола, не в штуках фишек. Игра 250/500: большой блайнд 500.
       Стек решает многое: при глубоких стеках выгодно дёшево уравнивать с маленькими парами и одномастными
       связками (попадёшь — выиграешь много), а с коротким (до 15 ББ) играют «ва-банк или пас».
-      Если у соперника денег заметно меньше, чем у тебя, помни: больше них с него не выиграешь.</p>`);
+      Если у соперника денег заметно меньше, чем у тебя, помни: больше них с него не выиграешь.</p>
+    <p class="note">Версия приложения: <b>${APP_VERSION}</b></p>`);
   sheet.querySelector('[data-act="close"]').onclick = closeSheet;
   bindSteppers(sheet);
 }
@@ -570,5 +573,8 @@ render();
 
 // Офлайн-режим (на localhost не включаем, чтобы при разработке не мешал кэш).
 if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
-  navigator.serviceWorker.register('sw.js').catch(() => { /* без офлайна тоже работает */ });
+  // updateViaCache: 'none' — сам офлайн-помощник тоже всегда берём свежий.
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+    .then((reg) => reg.update())
+    .catch(() => { /* без офлайна тоже работает */ });
 }
