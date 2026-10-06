@@ -6,7 +6,7 @@ import { handClass } from './src/hands.js';
 import { GEOMETRY, DEALER_XY, SEAT_XY, SEAT_COUNT, activeSeats, seatPosition, nextActive } from './src/table.js';
 
 // Номер версии — поднимать при каждом обновлении вместе с CACHE в sw.js.
-const APP_VERSION = 7;
+const APP_VERSION = 8;
 const $ = (id) => document.getElementById(id);
 const RANK_LABEL = { 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
 const rankLabel = (r) => RANK_LABEL[r] || String(r);
@@ -575,6 +575,28 @@ render();
 if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
   // updateViaCache: 'none' — сам офлайн-помощник тоже всегда берём свежий.
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
-    .then((reg) => reg.update())
+    .then((reg) => {
+      reg.update();
+      // Айфон не перезагружает приложение с экрана «Домой», а разворачивает его из памяти —
+      // поэтому при каждом возвращении в приложение проверяем, нет ли новой версии.
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') reg.update();
+      });
+    })
     .catch(() => { /* без офлайна тоже работает */ });
+  // Пришла новая версия: если раздача пустая — обновляемся сразу, иначе предлагаем кнопку.
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloading) return;
+    if (state.hole.every((c) => c === null) && boardCount() === 0) {
+      reloading = true;
+      location.reload();
+      return;
+    }
+    const bar = document.createElement('button');
+    bar.className = 'update-bar';
+    bar.textContent = 'Есть новая версия — нажми, чтобы обновить';
+    bar.onclick = () => { reloading = true; location.reload(); };
+    document.body.appendChild(bar);
+  });
 }

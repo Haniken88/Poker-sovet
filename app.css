@@ -170,3 +170,6 @@ h1 em { font-style: normal; color: var(--gold); }
 
 .gauge small { font-size: 10px; color: #8a7f6a; }
 .new-hand.big { width: 100%; min-height: 50px; margin-top: 12px; font-size: 15px; border-radius: 14px; }
+
+.update-bar { position: fixed; top: calc(8px + var(--safe-top)); left: 12px; right: 12px; z-index: 20; min-height: 44px;
+              border-radius: 12px; background: var(--gold); color: var(--ink); font: 700 14px Manrope; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
