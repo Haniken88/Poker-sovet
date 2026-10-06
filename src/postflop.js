@@ -103,16 +103,18 @@ export function whoBeatsYou(hero, board) {
  * toCall — сколько поставил соперник на этой улице (0 = ставок не было),
  * preflopAction — что было префлоп ('none'/'limp'/'raise'/'3bet'),
  * stack — сколько у тебя осталось денег (Infinity = не важно),
- * style — как блефует поставивший: 'rare' (редко), 'normal', 'often' (часто).
+ * style — как блефует поставивший: 'rare' (редко), 'normal', 'often' (часто),
+ * preflop — кто что делал до флопа ({ action, hero, raiser, reraiser, heroOpened }):
+ *   тогда руки соперников берутся из таблиц солверов.
  * Возвращает { action, amount, text, reason, equity, randomEquity, handName, draws }.
  */
 export function postflopAdvice({
-  hero, board, opponents = 1, pot, toCall = 0, preflopAction = 'none', stack = Infinity, style = 'normal',
+  hero, board, opponents = 1, pot, toCall = 0, preflopAction = 'none', stack = Infinity, style = 'normal', preflop = null,
   iterations = 8000, random = Math.random, compareStyles = true,
 }) {
   if (board.length < 3 || board.length > 5) throw new Error('На столе должно быть 3, 4 или 5 карт');
   const bet = toCall;
-  const { ranges, value } = opponentRanges({ board, opponents, preflopAction, bet, potBefore: pot, style });
+  const { ranges, value, about } = opponentRanges({ board, opponents, preflopAction, bet, potBefore: pot, style, preflop });
   const { equity } = calcEquity({ hero, board, opponents, ranges, iterations, random });
   const randomEquity = calcEquity({ hero, board, opponents, iterations: Math.round(iterations / 3), random }).equity;
   const handName = describeHand(hero, board);
@@ -145,7 +147,7 @@ export function postflopAdvice({
       action: act,
       amount: amount ? chips(amount) : 0,
       text: ACTION_TEXT[act] + (amount ? `${act === 'raise' ? ' до' : ''} ${chips(amount)}` : ''),
-      reason, equity, randomEquity, handName, draws, spr, close,
+      reason, equity, randomEquity, handName, draws, spr, close, about,
     };
   };
 
@@ -190,7 +192,7 @@ export function postflopAdvice({
   // Решение зависит от того, как блефует соперник? Скажем об этом прямо.
   const flip = (other) => {
     if (!compareStyles || style === other) return null;
-    const alt = postflopAdvice({ hero, board, opponents, pot, toCall, preflopAction, stack, style: other,
+    const alt = postflopAdvice({ hero, board, opponents, pot, toCall, preflopAction, stack, style: other, preflop,
       iterations: Math.round(iterations / 2), random, compareStyles: false });
     return alt.action;
   };

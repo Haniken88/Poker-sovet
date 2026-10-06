@@ -6,7 +6,7 @@ import { handClass } from './src/hands.js';
 import { GEOMETRY, DEALER_XY, SEAT_XY, SEAT_COUNT, activeSeats, seatPosition, nextActive } from './src/table.js';
 
 // Номер версии — поднимать при каждом обновлении вместе с CACHE в sw.js.
-const APP_VERSION = 11;
+const APP_VERSION = 12;
 const $ = (id) => document.getElementById(id);
 const RANK_LABEL = { 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
 const rankLabel = (r) => RANK_LABEL[r] || String(r);
@@ -283,6 +283,9 @@ const PREFLOP_CHOICES = [
   ['3bet', 'Повысили ×2', 'Повысили, а потом <b>повысили ещё раз</b> (3-бет).'],
 ];
 
+// Место повысившего (не ты) — для таблиц солверов.
+const raiserPos = () => (state.raiser && state.raiser !== state.hero ? seatPosition(state.occupied, state.button, state.raiser) : null);
+
 function seatLabel(n) {
   const pos = seatPosition(state.occupied, state.button, n);
   return n === state.hero ? 'ты' : `место ${n}${pos ? ` (${SHORT[pos.key] || pos.key})` : ''}`;
@@ -454,14 +457,16 @@ function renderTicket() {
         opener: state.raiser && state.raiser !== state.hero ? seatPosition(state.occupied, state.button, state.raiser) : null,
         heroOpened: state.preflop === '3bet' && state.raiser === state.hero,
         threeBettor: state.reraiser ? seatPosition(state.occupied, state.button, state.reraiser) : null });
-      const pe = preflopEquity({ hero, action: state.preflop, limpers: state.limpers });
+      const pe = preflopEquity({ hero, action: state.preflop, limpers: state.limpers, opener: raiserPos() });
       equity = pe.equity;
       gaugeNote = pe.label;
       lines = [`<b>${handClass(hero[0], hero[1])}</b> · ${heroPos.name}`, advice.reason];
     } else {
       const board = state.board.filter((c) => c !== null);
       advice = postflopAdvice({ hero, board, opponents: state.opponents, pot: state.pot,
-        toCall: state.toCall, preflopAction: state.preflop, stack: stackOrInf(), style: state.style, iterations: 6000 });
+        toCall: state.toCall, preflopAction: state.preflop, stack: stackOrInf(), style: state.style, iterations: 6000,
+        preflop: { action: state.preflop, hero: heroPos, raiser: raiserPos(), heroOpened: state.preflop === '3bet' && state.raiser === state.hero,
+          reraiser: state.reraiser ? seatPosition(state.occupied, state.button, state.reraiser) : null } });
       equity = advice.equity;
       const diff = Math.abs(advice.randomEquity - advice.equity) >= 0.05;
       gaugeNote = (state.toCall ? 'шанс против его ставки' : 'шанс выиграть')
@@ -470,6 +475,7 @@ function renderTicket() {
       const need = state.toCall ? ` · нужно ${Math.round((price / (state.pot + state.toCall + price)) * 100)} %` : '';
       const draws = advice.draws.names.length ? ` · ${advice.draws.names.join(', ')}, ${advice.draws.outs} аутов` : '';
       lines = [`<b>${advice.handName}</b>${draws}${need}`, advice.reason];
+      if (advice.about) lines.push(`<span class="about">Шанс посчитан ${advice.about}.</span>`);
       const danger = dangerLine(hero, board);
       if (danger) lines.push(danger);
     }

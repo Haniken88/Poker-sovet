@@ -7,8 +7,9 @@ import { evaluate } from './evaluator.js';
  * opponents — сколько соперников с неизвестными картами,
  * known — массив известных рук соперников (для разборов и тестов),
  * ranges — для каждого неизвестного соперника его возможные руки (или null = любые):
- *   { groups: [[[a, b], ...], ...], weights: [0.7, 0.3] } — сначала по весу выбираем
- *   группу (например «сильные руки» или «блеф»), потом случайную руку из неё;
+ *   { groups: [[[a, b, w?], ...], ...], weights: [0.7, 0.3] } — сначала по весу выбираем
+ *   группу (например «сильные руки» или «блеф»), потом случайную руку из неё
+ *   (w — частота руки 0…1, по умолчанию 1);
  * iterations — сколько раздач сыграть, random — свой генератор (для тестов).
  * Возвращает { win, tie, equity } в долях от 1.
  */
@@ -66,8 +67,10 @@ export function calcEquity({
         let roll = random(), g = 0;
         while (g < spec.weights.length - 1 && roll >= spec.weights[g]) roll -= spec.weights[g++];
         const group = spec.groups[g];
-        for (let tries = 0; tries < 40; tries++) {
-          const [x, y] = group[Math.floor(random() * group.length)];
+        for (let tries = 0; tries < 80; tries++) {
+          const [x, y, w = 1] = group[Math.floor(random() * group.length)];
+          // w — как часто соперник играет эту руку (из таблиц): 0,4 = в 40 % случаев.
+          if (w < 1 && random() > w) continue;
           if (!taken[x] && !taken[y]) { a = x; b = y; break; }
         }
       }

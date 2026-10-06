@@ -149,8 +149,11 @@ test('QQ на A-8-8-4-2: решение зависит от того, как б�
   const normal = post('Qh Qd', '4d Ad 8c 8s 2c', { pot: 750, toCall: 500, opponents: 1 });
   assert.ok(normal.equity > 0.1, `шанс ${normal.equity}`); // было 1 %
   assert.ok(normal.randomEquity > 0.7, `против любых рук ${normal.randomEquity}`);
-  assert.equal(normal.action, 'fold');
-  assert.match(normal.reason, /часто блефует — колл/);
+  // Против «обычного» соперника шанс почти равен цене колла — честно «спорно» и оба варианта в объяснении.
+  assert.equal(normal.close, true);
+  assert.match(normal.reason, /часто блефует — колл|почти не блефует — пас/);
+  const rare = post('Qh Qd', '4d Ad 8c 8s 2c', { pot: 750, toCall: 500, opponents: 1, style: 'rare' });
+  assert.equal(rare.action, 'fold');
   const often = post('Qh Qd', '4d Ad 8c 8s 2c', { pot: 750, toCall: 500, opponents: 1, style: 'often' });
   assert.equal(often.action, 'call');
 });
@@ -209,4 +212,13 @@ test('ответ на открытие совпадает со сводной т
       stack: 200, opener: positionInfo(9, 0) }).action;
     assert.equal(got === 'allin' ? 'raise' : got, want, `ББ против BTN: ${cls}`);
   }
+});
+
+test('после флопа руки соперника — из таблиц: против открытия с баттона шанс выше, чем против UTG', () => {
+  const ctx = (offset) => ({ action: 'raise', hero: positionInfo(9, 2), raiser: positionInfo(9, offset) });
+  const vs = (offset) => postflopAdvice({ hero: cards('Ts Td'), board: cards('9h 5c 2d'), pot: 13, toCall: 8,
+    preflopAction: 'raise', preflop: ctx(offset), iterations: 20000, random: seededRandom(3) });
+  const btn = vs(0), utg = vs(3);
+  assert.ok(btn.equity > utg.equity + 0.05, `баттон ${btn.equity}, UTG ${utg.equity}`);
+  assert.match(btn.about, /Баттон/);
 });

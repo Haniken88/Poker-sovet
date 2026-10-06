@@ -1,10 +1,10 @@
 // Офлайн-режим: сначала пробуем интернет (всегда свежая версия),
 // без связи — берём сохранённую копию из телефона.
-const CACHE = 'poker-v11';
+const CACHE = 'poker-v12';
 const FILES = [
   './', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest',
   'src/cards.js', 'src/evaluator.js', 'src/equity.js', 'src/hands.js', 'src/handRanks.js',
-  'src/positions.js', 'src/preflop.js', 'src/postflop.js', 'src/table.js', 'src/ranges.js', 'src/preflopData.js',
+  'src/positions.js', 'src/preflop.js', 'src/postflop.js', 'src/table.js', 'src/ranges.js', 'src/preflopData.js', 'src/openTables.js',
   'fonts/fonts.css', 'fonts/prata-latin.woff2', 'fonts/prata-cyrillic.woff2',
   'fonts/manrope-latin.woff2', 'fonts/manrope-cyrillic.woff2',
   'icons/icon-192.png', 'icons/apple-touch-icon.png',

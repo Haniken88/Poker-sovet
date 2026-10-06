@@ -2,7 +2,7 @@
 // Уровень — крепкая база для обычной игры с живыми соперниками, не солвер.
 import { handClass, parseRange } from './hands.js';
 import { rankOf } from './cards.js';
-import { topClasses, combosIn, PREFLOP_SHARE } from './ranges.js';
+import { topClasses, combosIn, PREFLOP_SHARE, chartCombos } from './ranges.js';
 import { calcEquity } from './equity.js';
 import { PREFLOP_DATA } from './preflopData.js';
 
@@ -25,19 +25,7 @@ export function chartLookup(situation, cls) {
 const mix = (v) => `рейз ${v.raise} %, колл ${v.call} %, пас ${v.fold} %`;
 const solvers = (v) => `по таблицам ${v.sources} солверов`;
 
-// Открытие (первым входишь в банк) — по опубликованным таблицам солвера для 100 ББ
-// (Preflop Wizard 9-max/6-max, GTO Gecko). Ключ — сколько игроков ходят после тебя:
-// 8 — UTG за полным столом, 5 — UTG за столом на 6, 4 — хайджек, 3 — катофф, 2 — баттон, 1 — МБ.
-const OPEN = {
-  8: '77+, ATs+, KJs+, QJs, JTs, AJo+', // ~9 %
-  7: '66+, A9s+, KTs+, QTs+, JTs, T9s, 98s, AJo+, KQo', // ~12 %
-  6: '55+, A8s+, A5s, KTs+, QTs+, J9s+, T9s, 98s, 87s, ATo+, KQo', // ~15 %
-  5: '22+, A2s+, K9s+, QTs+, JTs, T9s, 98s, 87s, AJo+, KQo', // ~17 %
-  4: '22+, A2s+, K8s+, Q9s+, J9s+, T8s+, 97s+, 87s, 76s, 65s, ATo+, KJo+, QJo', // ~21 %
-  3: '22+, A2s+, K5s+, Q8s+, J8s+, T8s+, 97s+, 86s+, 75s+, 64s+, 54s, A8o+, KTo+, QTo+, JTo', // ~27 %
-  2: '22+, A2s+, K2s+, Q2s+, J4s+, T6s+, 96s+, 85s+, 74s+, 64s+, 53s+, 43s, A2o+, K8o+, Q9o+, J9o+, T9o, 98o', // ~45 %
-  1: '22+, A2s+, K2s+, Q5s+, J7s+, T7s+, 96s+, 86s+, 75s+, 64s+, 54s, A2o+, K9o+, Q9o+, J9o+, T9o', // ~40 %
-};
+import { OPEN } from './openTables.js';
 const openRange = (behind) => OPEN[Math.min(8, Math.max(1, behind))];
 export const OPEN_RANGES = OPEN;
 
@@ -301,7 +289,15 @@ export const ACTION_TEXT = {
  * (кто-то из блайндов уравняет), при лимпах — против лимперов, при повышении —
  * против диапазона повысившего. Возвращает { equity, opponents, label }.
  */
-export function preflopEquity({ hero, action = 'none', limpers = 1, iterations = 3000, random = Math.random }) {
+export function preflopEquity({ hero, action = 'none', limpers = 1, iterations = 3000, random = Math.random, opener = null }) {
+  // Знаем, кто повысил, — его руки из таблиц солверов (открытие с его места).
+  if (action === 'raise' && opener) {
+    const range = opener.behind >= 6 ? combosIn(parseRange(OPEN[Math.min(8, opener.behind)])) : chartCombos(`open:${chartPos(opener)}`, 'raise');
+    if (range) {
+      const { equity } = calcEquity({ hero, opponents: 1, ranges: [{ groups: [range], weights: [1] }], iterations, random });
+      return { equity, opponents: 1, label: `против рук открытия: ${opener.name}` };
+    }
+  }
   if (action === 'raise' || action === '3bet') {
     const range = combosIn(topClasses(action === '3bet' ? PREFLOP_SHARE.threeBettor : PREFLOP_SHARE.raiser));
     const { equity } = calcEquity({ hero, opponents: 1, ranges: [{ groups: [range], weights: [1] }], iterations, random });
