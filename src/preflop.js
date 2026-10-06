@@ -129,6 +129,11 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
     if (position.key === 'SB' && topClasses(0.55).has(cls)) {
       return result('call', bb, `Доплатить всего полблайнда, а в банке уже ${limpers + 2} блайнда — с ${cls} выгодно посмотреть флоп.`);
     }
+    // Поздняя позиция и всего один лимпер: эту руку ты бы и так открыл с этого места —
+    // за один блайнд и с позицией смотреть флоп выгодно (повысить тоже не ошибка).
+    if (late && limpers === 1 && inRange(cls, openRange(position.behind))) {
+      return { ...result('call', bb, `Один лимпер, а ты в позиции: с этого места ${cls} ты бы и так открыл. Доплатить один блайнд и посмотреть флоп выгодно, повысить до ${chips(raiseSize)} тоже можно.`), close: true };
+    }
     if (inRange(cls, LIMP_CALL) && inRange(cls, openRange(position.behind)) && implied(bb) >= 20) {
       return result('call', bb, `${cls} хорошо играет в многосторонних банках: дёшево, а попадёшь в сет или дро — выиграешь много.`);
     }

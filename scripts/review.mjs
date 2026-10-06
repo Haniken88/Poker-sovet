@@ -28,6 +28,9 @@ const PREFLOP = [
   ['Таблица: 42 одной масти с баттона — пас', 'BTN', '4s 2s', 'none', 0, 100, 'fold'],
   ['Раздача владельца 06.10: Q9 разных с UTG+1, все сбросили', 'UTG+1', 'Qd 9c', 'none', 0, 150, 'fold'],
   ['Та же Q9 разных с баттона', 'BTN', 'Qd 9c', 'none', 0, 150, 'raise'],
+  ['Раздача владельца 06.10: Q9 разных на баттоне, один лимпер', 'BTN', 'Qd 9c', 'limp1', 0, 150, 'call|raise'],
+  ['K7 разных из UTG+2, один лимпер', 'UTG+2', 'Kd 7c', 'limp1', 0, 150, 'fold'],
+  ['Q9 разных на баттоне, три лимпера', 'BTN', 'Qd 9c', 'limp3', 0, 150, 'fold'],
   ['Таблица: K9 разных с МБ — открывать', 'SB', 'Ks 9d', 'none', 0, 100, 'raise'],
   ['Таблица: K8 разных с МБ — пас', 'SB', 'Ks 8d', 'none', 0, 100, 'fold'],
   ['Защита ББ: Q6 разных против 2 ББ', 'BB', 'Qd 6c', 'raise', 4, 100, 'call|fold'],
@@ -130,10 +133,12 @@ console.log('| # | Раздача | До тебя | Совет | Шанс | Жд
 console.log('|---|---|---|---|---|---|---|');
 PREFLOP.forEach(([title, pos, hand, action, raiseTo, stackBB, want], i) => {
   const hero = parseCards(hand);
-  const a = preflopAdvice({ hero, position: positionInfo(9, POS[pos]), action, limpers: 2, raiseTo, bigBlind: BB, stack: stackBB * BB });
-  const e = preflopEquity({ hero, action, limpers: 2, iterations: 20000, random });
+  const limpers = /^limp\d$/.test(action) ? Number(action.slice(4)) : 2;
+  const act = action.startsWith('limp') ? 'limp' : action;
+  const a = preflopAdvice({ hero, position: positionInfo(9, POS[pos]), action: act, limpers, raiseTo, bigBlind: BB, stack: stackBB * BB });
+  const e = preflopEquity({ hero, action: act, limpers, iterations: 20000, random });
   const good = ok(a.action, want); if (!good) bad++;
-  console.log(`| ${i + 1} | ${title} | ${NAMES[action]}${raiseTo ? ` до ${raiseTo}` : ''} | **${a.text}** | ${pct(e.equity)} ${e.label} | ${wantText(want)} | ${good ? '✅' : '❌'} |`);
+  console.log(`| ${i + 1} | ${title} | ${NAMES[action.startsWith('limp') ? 'limp' : action]}${raiseTo ? ` до ${raiseTo}` : ''} | **${a.text}** | ${pct(e.equity)} ${e.label} | ${wantText(want)} | ${good ? '✅' : '❌'} |`);
 });
 
 console.log('\n## После флопа (банк — в центре, ставка — отдельно)\n');
