@@ -131,6 +131,12 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
     }
     // Поздняя позиция и всего один лимпер: эту руку ты бы и так открыл с этого места —
     // за один блайнд и с позицией смотреть флоп выгодно (повысить тоже не ошибка).
+    // Против нескольких лимперов в позиции — ещё и две старшие карты (от десятки) разных мастей:
+    // стриты и сильные пары, а цена — один блайнд при большом банке.
+    const broadway = hero.every((c) => rankOf(c) >= 10);
+    if (late && limpers >= 2 && broadway && inRange(cls, openRange(position.behind))) {
+      return result('call', bb, `${limpers} ${limpers >= 5 ? 'лимперов' : 'лимпера'}, а ты в позиции: ${cls} — две старшие карты (стриты и сильные пары), а доплатить всего один блайнд при банке в ${limpers + 1.5} блайнда.`);
+    }
     if (late && limpers === 1 && inRange(cls, openRange(position.behind))) {
       return { ...result('call', bb, `Один лимпер, а ты в позиции: с этого места ${cls} ты бы и так открыл. Доплатить один блайнд и посмотреть флоп выгодно, повысить до ${chips(raiseSize)} тоже можно.`), close: true };
     }
