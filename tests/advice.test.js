@@ -44,7 +44,7 @@ const pre = (hand, players, offset, extra = {}) =>
 
 test('префлоп: открытие зависит от позиции', () => {
   assert.equal(pre('As Ah', 9, 3).action, 'raise');
-  assert.equal(pre('As Ah', 9, 3).amount, 3);
+  assert.equal(pre('As Ah', 9, 3).amount, 3.5); // живая игра — открытие 3,5 ББ
   assert.equal(pre('Ks 9d', 9, 3).action, 'fold'); // K9o с ранней — пас
   assert.equal(pre('Ks 9d', 9, 0).action, 'raise'); // а с баттона — рейз
   assert.equal(pre('7s 2d', 9, 0).action, 'fold');
@@ -53,7 +53,7 @@ test('префлоп: открытие зависит от позиции', () =
 
 test('префлоп: против лимперов и повышений', () => {
   assert.equal(pre('As Ks', 9, 5, { action: 'limp', limpers: 2 }).action, 'raise');
-  assert.equal(pre('As Ks', 9, 5, { action: 'limp', limpers: 2 }).amount, 5);
+  assert.equal(pre('As Ks', 9, 5, { action: 'limp', limpers: 2 }).amount, 5.5);
   assert.equal(pre('6s 6d', 9, 0, { action: 'limp', limpers: 1 }).action, 'raise'); // с баттона — изолировать
   assert.equal(pre('4s 4d', 9, 0, { action: 'limp', limpers: 2 }).action, 'call'); // доехать до сета
   assert.equal(pre('Ks Kd', 9, 4, { action: 'raise', raiseTo: 3 }).action, 'raise');
@@ -185,19 +185,25 @@ test('ставка не больше стека: почти весь стек �
 });
 
 
-// Префлоп по сводным таблицам солверов: приложение выдаёт то же, что таблица, для каждой из 169 рук.
-test('открытие первым совпадает со сводной таблицей солверов (LJ, HJ, CO, BTN, SB)', async () => {
+// Префлоп по сводным таблицам солверов. Живая игра шире: всё, что открывают солверы, приложение
+// тоже открывает, а сверху добавляет 3–8 % рук (не больше 10 %).
+test('открытие первым: всё из таблиц солверов + живая добавка не больше 10 % (LJ, HJ, CO, BTN, SB)', async () => {
   const { chartLookup } = await import('../src/preflop.js');
-  const { allClasses } = await import('../src/hands.js');
+  const { allClasses, combosOf } = await import('../src/hands.js');
   const { makeCard } = await import('../src/cards.js');
   const R = '23456789TJQKA';
   const toCards = (cls) => [makeCard(R.indexOf(cls[0]) + 2, 0), makeCard(R.indexOf(cls[1]) + 2, cls.endsWith('s') ? 0 : 1)];
   for (const [key, offset] of [['LJ', 6], ['HJ', 7], ['CO', 8], ['BTN', 0], ['SB', 1]]) {
+    let strict = 0, live = 0;
     for (const cls of allClasses()) {
-      const want = chartLookup(`open:${key}`, cls).top;
+      const solverOpens = chartLookup(`open:${key}`, cls).top === 'raise';
       const got = preflopAdvice({ hero: toCards(cls), position: positionInfo(9, offset), stack: 200, bigBlind: 2 }).action;
-      assert.equal(got, want === 'raise' ? 'raise' : 'fold', `${key} ${cls}`);
+      if (solverOpens) assert.equal(got, 'raise', `${key} ${cls}: солверы открывают — приложение тоже должно`);
+      if (solverOpens) strict += combosOf(cls);
+      if (got === 'raise') live += combosOf(cls);
     }
+    const extra = ((live - strict) / 1326) * 100;
+    assert.ok(extra >= 0 && extra <= 10, `${key}: живая добавка ${extra.toFixed(1)} %`);
   }
 });
 

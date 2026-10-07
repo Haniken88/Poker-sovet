@@ -2,7 +2,7 @@
 import { rankOf, suitOf } from './cards.js';
 import { evaluate, categoryOf, handName as comboName, CATEGORY } from './evaluator.js';
 import { calcEquity } from './equity.js';
-import { opponentRanges } from './ranges.js';
+import { opponentRanges, preflopRanges, hasSomething } from './ranges.js';
 import { ACTION_TEXT } from './preflop.js';
 
 const RANK_NAMES = {
@@ -98,6 +98,30 @@ export function whoBeatsYou(hero, board) {
 }
 
 /**
+ * Как руки соперника легли на этот стол (как во Flopzilla): доля «пара и лучше», «только дро», «ничего».
+ * Считается по его рукам до флопа (из таблиц), без учёта ставок на этой улице. null — если не знаем его руки.
+ */
+export function describeRangeHit(preflop, board, hero) {
+  const charts = preflopRanges(preflop);
+  if (!charts) return null;
+  const dead = new Set([...board, ...hero]);
+  const boardCat = categoryOf(evaluate(board));
+  let made = 0, draw = 0, total = 0;
+  for (const [a, b, w = 1] of charts.aggressor) {
+    if (dead.has(a) || dead.has(b)) continue;
+    total += w;
+    const cat = categoryOf(evaluate([a, b, ...board]));
+    const ranks = board.map(rankOf);
+    const usesCard = rankOf(a) === rankOf(b) || ranks.includes(rankOf(a)) || ranks.includes(rankOf(b)) || cat > boardCat + 1;
+    if (cat > boardCat && usesCard) made += w;
+    else if (board.length < 5 && hasSomething(a, b, board)) draw += w;
+  }
+  if (!total) return null;
+  const pct = (x) => Math.round((x / total) * 100);
+  return { made: pct(made), draw: pct(draw), air: 100 - pct(made) - pct(draw) };
+}
+
+/**
  * hero — 2 карты, board — 3–5 карт, opponents — сколько соперников ещё в раздаче,
  * pot — банк в центре стола (без ставок этой улицы),
  * toCall — сколько поставил соперник на этой улице (0 = ставок не было),
@@ -115,6 +139,7 @@ export function postflopAdvice({
   if (board.length < 3 || board.length > 5) throw new Error('На столе должно быть 3, 4 или 5 карт');
   const bet = toCall;
   const { ranges, value, about } = opponentRanges({ board, opponents, preflopAction, bet, potBefore: pot, style, preflop });
+  const rangeHit = describeRangeHit(preflop, board, hero);
   const { equity } = calcEquity({ hero, board, opponents, ranges, iterations, random });
   const randomEquity = calcEquity({ hero, board, opponents, iterations: Math.round(iterations / 3), random }).equity;
   const handName = describeHand(hero, board);
@@ -149,7 +174,7 @@ export function postflopAdvice({
       action: act,
       amount: amount ? chips(amount) : 0,
       text: ACTION_TEXT[act] + (amount ? `${act === 'raise' ? ' до' : ''} ${chips(amount)}` : ''),
-      reason, equity, randomEquity, handName, draws, spr, close, about, vsValue: typeof vsValue === 'number' ? vsValue : null, needPct,
+      reason, equity, randomEquity, handName, draws, spr, close, about, vsValue: typeof vsValue === 'number' ? vsValue : null, needPct, rangeHit,
     };
   };
 
@@ -169,14 +194,15 @@ export function postflopAdvice({
     }
     if (heroAggressor && headsUp && !(spr < 1.5 && topPairPlus)) {
       // Повышал ты, тебе прочекали: ставка с сильными и часть блефов со слабыми, середина — чек.
-      if (equity >= 0.8) return result('bet', pot * 0.66, `Шанс ${percent} % — сильная рука, ставь 2/3 банка.`);
+      // Живая игра: любители слишком часто сбрасывают на ставку — ставим чаще, чем солвер (с 70 %, а не с 80 %).
+      if (equity >= 0.7) return result('bet', pot * 0.66, `Шанс ${percent} % — сильная рука, ставь 2/3 банка.`);
       if (equity < 0.4) {
         close = true;
         return result('bet', pot * 0.5, draws.outs >= 4
           ? `Слабая рука, но с дро (${draws.outs} аутов): ставка-блеф в полбанка — заберёшь банк или доедешь. Солвер так делает примерно в половине случаев.`
           : `Слабая рука (шанс ${percent} %): тут солвер примерно в половине случаев блефует полбанка, в половине — чек.`);
       }
-      close = equity >= 0.7;
+      close = equity >= 0.6;
       return result('check', 0, `Шанс ${percent} % — средняя рука: проще чек и дойти до вскрытия дёшево.`);
     }
     close = Math.abs(equity - valueNeed) < 0.04;

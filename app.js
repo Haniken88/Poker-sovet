@@ -6,7 +6,7 @@ import { handClass } from './src/hands.js';
 import { GEOMETRY, DEALER_XY, SEAT_XY, SEAT_COUNT, activeSeats, seatPosition, nextActive } from './src/table.js';
 
 // Номер версии — поднимать при каждом обновлении вместе с CACHE в sw.js.
-const APP_VERSION = 14;
+const APP_VERSION = 15;
 const $ = (id) => document.getElementById(id);
 const RANK_LABEL = { 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
 const rankLabel = (r) => RANK_LABEL[r] || String(r);
@@ -474,7 +474,10 @@ function renderTicket() {
       const need = advice.needPct != null ? ` · колл выгоден от ${advice.needPct} %` : '';
       const draws = advice.draws.names.length ? ` · ${advice.draws.names.join(', ')}, ${advice.draws.outs} аутов` : '';
       lines = [`<b>${advice.handName}</b>${draws}${need}`, advice.reason];
-      if (advice.about) lines.push(`<span class="about">Шанс посчитан ${advice.about}.</span>`);
+      if (advice.rangeHit) {
+        const h = advice.rangeHit;
+        lines.push(`<span class="about">Его руки на этом столе: ${h.made} % пара и лучше, ${h.draw} % дро, ${h.air} % ничего.</span>`);
+      } else if (advice.about) lines.push(`<span class="about">Шанс посчитан ${advice.about}.</span>`);
       const danger = dangerLine(hero, board);
       if (danger) lines.push(danger);
     }

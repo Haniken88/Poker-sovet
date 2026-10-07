@@ -23,6 +23,11 @@ export function chartLookup(situation, cls) {
   return { raise, call, fold, top, close: close === 1, sources: sit.sources.length };
 }
 const mix = (v) => `рейз ${v.raise} %, колл ${v.call} %, пас ${v.fold} %`;
+
+// Живая игра по умолчанию (2026-10-07, владелец играет вживую): шире открытия и коллы в позиции,
+// крупнее открытие — так советуют профи против слабых живых соперников.
+export const LIVE_GAME = true;
+const OPEN_SIZE = 3.5; // в живой игре открывают крупнее, чем 2,5–3 ББ онлайн
 const solvers = (v) => `по таблицам ${v.sources} солверов`;
 
 import { OPEN } from './openTables.js';
@@ -41,6 +46,9 @@ const CALL_BIG = '77-JJ, AQs, KQs, AQo';
 // Спекулятивные руки: дешёвый колл ради большого банка, когда попадёшь (нужны глубокие стеки).
 const SPECULATIVE = 'A2s-A9s, KTs, QTs, J9s, T9s, 98s, 87s, 76s, 65s, 54s, T8s, 97s, 86s, 75s';
 // Сколько эффективных стеков (в разах от цены колла) нужно, чтобы ловить сет / доезжать.
+// Живая игра — что дополнительно уравниваем против одного повышения (см. chartVsOpen).
+const LIVE_CALL = '22-99, A2s-A9s, KTs+, QTs+, JTs, J9s, T9s, T8s, 98s, 87s, 76s, 65s, 54s';
+const LIVE_CALL_LATE = 'KQo, KJo, KTo, QJo, QTo, JTo, ATo, AJo';
 const SET_MINING_IN_POSITION = 18; // 15–20 по книгам, в позиции
 const SET_MINING_OUT_OF_POSITION = 25; // без позиции — нужно больше
 const SPECULATIVE_IMPLIED = 30;
@@ -117,13 +125,27 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
     if (isBB) return result('check', 0, 'Все сбросили до тебя — ты уже забрал блайнды.');
     const v = position.behind <= 5 ? chartLookup(`open:${chartPos(position)}`, cls) : null;
     if (v) {
-      const opens = v.top === 'raise';
-      return { ...result(opens ? 'raise' : 'fold', opens ? 3 * bb : 0, opens
-        ? `${cls} с этого места открывают: ${solvers(v)} рейз в ${v.raise} % случаев.`
-        : `${cls} с этого места не открывают: ${solvers(v)} рейз только в ${v.raise} % случаев.`), close: v.close };
+      // Живая игра (по умолчанию): профи против слабых живых соперников открывают на 5–10 % рук больше —
+      // руку открываем, если солверы хоть иногда открывают её с этого места, а с LJ и HJ ещё
+      // и то, что уверенно открывают на соседнем месте позже.
+      const key = chartPos(position);
+      const NEXT = { LJ: 'HJ', HJ: 'CO' };
+      const threshold = key === 'SB' ? 35 : 15;
+      const nextV = NEXT[key] ? chartLookup(`open:${NEXT[key]}`, cls) : null;
+      const strict = v.top === 'raise';
+      const live = LIVE_GAME && (v.raise >= threshold || (nextV && nextV.raise >= 60));
+      const opens = strict || live;
+      const why = strict ? `${cls} с этого места открывают: ${solvers(v)} рейз в ${v.raise} % случаев.`
+        : live ? `${cls} — открытие для живой игры: солверы с этого места открывают её редко (${v.raise} %), но против слабых соперников профи играют шире.`
+        : `${cls} с этого места не открывают: ${solvers(v)} рейз только в ${v.raise} % случаев.`;
+      return { ...result(opens ? 'raise' : 'fold', opens ? OPEN_SIZE * bb : 0, why), close: v.close || (live && !strict) };
+    }
+    // Ранние места полного стола: в живой игре — на одну ступень свободнее.
+    if (LIVE_GAME && !inRange(cls, openRange(position.behind)) && inRange(cls, openRange(position.behind - 1))) {
+      return { ...result('raise', OPEN_SIZE * bb, `${cls} — открытие для живой игры: по строгим таблицам с этого места пас, но против слабых соперников можно шире.`), close: true };
     }
     if (inRange(cls, openRange(position.behind))) {
-      return result('raise', 3 * bb, `${cls} достаточно сильна, чтобы входить первым с этой позиции.`);
+      return result('raise', OPEN_SIZE * bb, `${cls} достаточно сильна, чтобы входить первым с этой позиции.`);
     }
     // На грани: с соседнего (более позднего) места эту руку уже открывают.
     const edge = inRange(cls, openRange(position.behind - 1));
@@ -154,12 +176,16 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
     // Таблицы — для 100 ББ. При стеке меньше 60 ББ коллы ради сета и «на попадание» не окупаются.
     const speculative = (isPair && inRange(cls, '22-77')) || inRange(cls, SPECULATIVE);
     if (act === 'call' && speculative && stack / bb < 60) { act = 'fold'; close = true; note = ` Стек меньше 60 ББ: ради сета или флеша уравнивать уже невыгодно — потом мало выиграешь.`; }
-    // Живая игра: руки «на попадание» (одномастные связки, тузы одной масти, маленькие пары) на баттоне
-    // или большом блайнде при глубоком стеке уравнивают, если солверы хоть иногда их играют, —
-    // за живым столом собранный стрит или флеш оплачивают чаще, чем в онлайн-таблицах.
-    const liveSpec = (isPair && inRange(cls, '22-99')) || inRange(cls, SPECULATIVE);
-    if (act === 'fold' && liveSpec && ['BTN', 'BB'].includes(heroKey) && raiseBB <= 3.5 && stack / bb >= 80 && v.raise + v.call >= 12) {
-      act = 'call'; close = true; note = ' В живой игре такие руки уравнивают: соберёшь стрит, флеш или сет — заплатят.';
+    // Живая игра: против одного повышения на катоффе, баттоне и ББ уравниваем шире, чем строгие таблицы —
+    // одномастные старшие руки, связки, пары, тузы одной масти; против позднего повышения (катофф,
+    // баттон, МБ) — ещё и разномастные старшие (JT, QJ, KJ…). Так советуют профи против слабых живых соперников.
+    const lateOpener = ['CO', 'BTN', 'SB'].includes(openerKey);
+    // На ББ часть ставки уже в банке — разномастные старшие против обычного повышения (≤ 3 ББ) тоже уравниваем.
+    const liveCall = inRange(cls, LIVE_CALL) || (inRange(cls, LIVE_CALL_LATE)
+      && ((lateOpener && ['BTN', 'BB'].includes(heroKey)) || (heroKey === 'BB' && raiseBB <= 3)));
+    if (LIVE_GAME && act === 'fold' && liveCall && ['CO', 'BTN', 'BB'].includes(heroKey) && raiseBB <= 3.5 && stack / bb >= 60) {
+      act = 'call'; close = true;
+      note = ' Строгие таблицы тут чаще пасуют, но в живой игре такую руку уравнивают: соберёшь пару с хорошим кикером, стрит, флеш или сет — заплатят.';
     }
     // Минимальное повышение дешевле, чем в таблицах: руки «на грани» можно уравнять.
     if (act === 'fold' && raiseBB <= 2.2 && v.raise + v.call >= 25) { act = 'call'; close = true; note = ' Повышение минимальное — дешевле, чем в таблицах, поэтому можно уравнять.'; }
@@ -174,7 +200,7 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
   }
 
   if (action === 'limp') {
-    const raiseSize = (3 + limpers) * bb;
+    const raiseSize = (OPEN_SIZE + limpers) * bb;
     // Повышаем, если рука входит в диапазон с запасом: каждый лимпер — как два лишних игрока после тебя.
     if (inRange(cls, openRange(position.behind + 2 * limpers + 1))) {
       return result('raise', raiseSize, `${cls} — сильная рука, повышай и забирай инициативу у лимперов.`);
