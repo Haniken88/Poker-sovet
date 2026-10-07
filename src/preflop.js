@@ -2,7 +2,7 @@
 // Уровень — крепкая база для обычной игры с живыми соперниками, не солвер.
 import { handClass, parseRange } from './hands.js';
 import { rankOf } from './cards.js';
-import { topClasses, combosIn, PREFLOP_SHARE, chartCombos } from './ranges.js';
+import { topClasses, combosIn, PREFLOP_SHARE, chartCombos, effectiveOpener, STYLE_NAMES } from './ranges.js';
 import { calcEquity } from './equity.js';
 import { PREFLOP_DATA } from './preflopData.js';
 
@@ -71,7 +71,9 @@ const chips = (amount) => Math.round(amount * 10) / 10;
  * heroOpened — первым повышал ты сам (тогда «Повысили ×2» = 3-бет против тебя).
  */
 export function preflopAdvice({ hero, position, action = 'none', limpers = 0, raiseTo = 0, bigBlind = 1, stack = Infinity,
-  opener = null, threeBettor = null, heroOpened = false }) {
+  opener = null, threeBettor = null, heroOpened = false, openerStyle = 'normal' }) {
+  const realOpener = opener;
+  opener = effectiveOpener(opener, openerStyle);
   const cls = handClass(hero[0], hero[1]);
   const bb = bigBlind;
   const late = position.group === 'late';
@@ -141,12 +143,21 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
   // Ответ на одно повышение по таблицам солверов. null — таблицы для этой пары мест нет.
   function chartVsOpen() {
     let heroKey = chartPos(position);
-    const openerKey = opener ? chartPos(opener) : (['LJ', 'HJ'].includes(heroKey) ? 'LJ' : 'HJ');
+    let openerKey = opener ? chartPos(opener) : (['LJ', 'HJ'].includes(heroKey) ? 'LJ' : 'HJ');
+    // Таблицы есть только для «открывший раньше тебя». Если тип «много рук» сдвинул его за тебя —
+    // берём самое позднее место перед тобой, а руки «на грани» ниже разрешим уравнять.
+    const ORDER = ['LJ', 'HJ', 'CO', 'BTN', 'SB', 'BB'];
+    let capped = false;
+    if (!['SB', 'BB'].includes(heroKey) && ORDER.indexOf(openerKey) >= ORDER.indexOf(heroKey)) {
+      const prev = ORDER[Math.max(0, ORDER.indexOf(heroKey) - 1)];
+      capped = prev !== openerKey; openerKey = prev;
+    }
     // Оба на ранних местах полного стола: ты — следующий после открывшего.
     if (heroKey === openerKey || (heroKey === 'LJ' && openerKey !== 'LJ')) heroKey = 'HJ';
     const v = chartLookup(`vsopen:${heroKey}:${openerKey}`, cls);
     if (!v) return null;
-    const who = opener ? '' : ' (кто повысил, не отмечено — считаю, что средняя позиция)';
+    const who = !opener ? ' (кто повысил, не отмечено — считаю, что средняя позиция)'
+      : openerStyle !== 'normal' ? ` Соперник ${STYLE_NAMES[openerStyle]} — считаю его повышение как с места ${opener.key}.` : '';
     const threeBetSize = (position.group === 'blinds' ? 4 : 3) * raiseTo;
     let act = v.top, close = v.close, note = '';
     // Таблицы посчитаны для повышения в 2,5–3 ББ. Больше — уравниваем только уверенные коллы.
@@ -154,6 +165,17 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
     // Таблицы — для 100 ББ. При стеке меньше 60 ББ коллы ради сета и «на попадание» не окупаются.
     const speculative = (isPair && inRange(cls, '22-77')) || inRange(cls, SPECULATIVE);
     if (act === 'call' && speculative && stack / bb < 60) { act = 'fold'; close = true; note = ` Стек меньше 60 ББ: ради сета или флеша уравнивать уже невыгодно — потом мало выиграешь.`; }
+    // Живая игра: руки «на попадание» (одномастные связки, тузы одной масти, маленькие пары) на баттоне
+    // или большом блайнде при глубоком стеке уравнивают, если солверы хоть иногда их играют, —
+    // за живым столом собранный стрит или флеш оплачивают чаще, чем в онлайн-таблицах.
+    const liveSpec = (isPair && inRange(cls, '22-99')) || inRange(cls, SPECULATIVE);
+    if (act === 'fold' && liveSpec && ['BTN', 'BB'].includes(heroKey) && raiseBB <= 3.5 && stack / bb >= 80 && v.raise + v.call >= 12) {
+      act = 'call'; close = true; note = ' В живой игре такие руки уравнивают: соберёшь стрит, флеш или сет — заплатят.';
+    }
+    // Повысивший играет много рук, а таблица не может сдвинуть его ещё позже — руки «на грани» уравниваем.
+    if (act === 'fold' && openerStyle === 'loose' && (capped || v.raise + v.call >= 20) && v.raise + v.call >= 10) {
+      act = 'call'; close = true; note = ' Против игрока, который повышает со многим, такую руку можно уравнять.';
+    }
     // Минимальное повышение дешевле, чем в таблицах: руки «на грани» можно уравнять.
     if (act === 'fold' && raiseBB <= 2.2 && v.raise + v.call >= 25) { act = 'call'; close = true; note = ' Повышение минимальное — дешевле, чем в таблицах, поэтому можно уравнять.'; }
     // Глубокие стеки (150+ ББ): маленькую пару можно уравнять ради сета — так советуют книги.
@@ -289,13 +311,15 @@ export const ACTION_TEXT = {
  * (кто-то из блайндов уравняет), при лимпах — против лимперов, при повышении —
  * против диапазона повысившего. Возвращает { equity, opponents, label }.
  */
-export function preflopEquity({ hero, action = 'none', limpers = 1, iterations = 3000, random = Math.random, opener = null }) {
+export function preflopEquity({ hero, action = 'none', limpers = 1, iterations = 3000, random = Math.random, opener = null, openerStyle = 'normal' }) {
+  const shown = opener;
+  opener = effectiveOpener(opener, openerStyle);
   // Знаем, кто повысил, — его руки из таблиц солверов (открытие с его места).
   if (action === 'raise' && opener) {
     const range = opener.behind >= 6 ? combosIn(parseRange(OPEN[Math.min(8, opener.behind)])) : chartCombos(`open:${chartPos(opener)}`, 'raise');
     if (range) {
       const { equity } = calcEquity({ hero, opponents: 1, ranges: [{ groups: [range], weights: [1] }], iterations, random });
-      return { equity, opponents: 1, label: `против рук открытия: ${opener.name}` };
+      return { equity, opponents: 1, label: `против рук открытия: ${shown.name}${openerStyle !== 'normal' ? ` (${STYLE_NAMES[openerStyle]})` : ''}` };
     }
   }
   if (action === 'raise' || action === '3bet') {

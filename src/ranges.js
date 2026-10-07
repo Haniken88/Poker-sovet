@@ -29,6 +29,19 @@ export const combosIn = (classes) => ALL_COMBOS.filter(([a, b]) => classes.has(h
 const CHART = ['LJ', 'HJ', 'CO', 'BTN', 'SB', 'BB'];
 const chartKey = (pos) => (pos ? (CHART.includes(pos.key) ? pos.key : 'LJ') : null);
 
+// Тип повысившего: «много рук» — повышает так же широко, как игрок на 4 места позже (живые «любители» —
+// 35–45 % рук с любого места); «мало рук» — как на 2 места раньше.
+const BEHIND_KEY = { 5: 'LJ', 4: 'HJ', 3: 'CO', 2: 'BTN', 1: 'SB' };
+const STYLE_SHIFT = { tight: 2, normal: 0, loose: -4 };
+export const STYLE_NAMES = { tight: 'играет мало рук', normal: '', loose: 'играет много рук' };
+export function effectiveOpener(opener, style = 'normal') {
+  if (!opener) return null;
+  if (opener.key === 'BB') return opener;
+  const behind = Math.min(8, Math.max(1, opener.behind + (STYLE_SHIFT[style] ?? 0)));
+  const key = BEHIND_KEY[behind] || (behind >= 6 ? 'UTG' : opener.key);
+  return { ...opener, key, behind, styled: style !== 'normal' };
+}
+
 /** Руки из сводной таблицы с весами: [карта, карта, частота 0…1]. kind — 'raise', 'call' или 'play'. */
 export function chartCombos(situation, kind) {
   const sit = PREFLOP_DATA[situation];
@@ -51,7 +64,8 @@ export function chartCombos(situation, kind) {
  */
 export function preflopRanges(preflop) {
   if (!preflop) return null;
-  const { action, hero, raiser, reraiser, heroOpened } = preflop;
+  const { action, hero, reraiser, heroOpened } = preflop;
+  const raiser = effectiveOpener(preflop.raiser, preflop.raiserStyle);
   const heroKey = chartKey(hero);
   if (action === 'raise' && raiser) {
     const rk = chartKey(raiser);
@@ -61,7 +75,8 @@ export function preflopRanges(preflop) {
       : chartCombos(`open:${rk}`, 'raise');
     // Кто ещё уравнял — не знаем; чаще всего это большой блайнд.
     const others = chartCombos(`vsopen:BB:${rk}`, 'call') || aggressor;
-    return aggressor ? { aggressor, others, about: `против рук открытия: ${raiser.name}` } : null;
+    const style = STYLE_NAMES[preflop.raiserStyle] ? ` (${STYLE_NAMES[preflop.raiserStyle]})` : '';
+    return aggressor ? { aggressor, others, about: `против рук открытия: ${preflop.raiser.name}${style}` } : null;
   }
   if (action === 'none' && heroKey && heroKey !== 'BB') {
     // Ты открыл, тебя уравняли — чаще всего большой блайнд.

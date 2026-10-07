@@ -29,6 +29,17 @@ def best(v):
 R = 'AKQJT98765432'
 ALL = [R[i] * 2 for i in range(13)] + [R[i] + R[j] + t for i in range(13) for j in range(i + 1, 13) for t in 'so']
 
+SPEC = set()
+for i, a in enumerate(R):
+    for j in range(i + 1, 13):
+        b = R[j]
+        if j - i <= 2 and i >= 3: SPEC.add(a + b + 's')   # одномастные связки и с одним пропуском: QJs…43s
+    if i == 0:
+        for b in R[5:]: SPEC.add('A' + b + 's')             # тузы одной масти A9s…A2s
+for p in '65432': SPEC.add(p + p)                           # маленькие пары 66…22
+
+def is_speculative(h): return h in SPEC
+
 def main(out_js, out_report, *sources):
     tables = [(name, t) for name, t in sources]
     sits = sorted({s for _, t in tables for s in t})
@@ -41,6 +52,12 @@ def main(out_js, out_report, *sources):
         for h in ALL:
             per = []
             for n, t in have:
+                # gto-solver сам пишет, что занижает руки «на попадание» (не доигрывает постфлоп) —
+                # если он для такой руки осторожнее остальных, его голос не берём.
+                if n == 'gtosolver' and is_speculative(h) and len(have) > 1:
+                    v0 = t.get(h, {})
+                    others = [o[h].get('raise', 0) + o[h].get('call', 0) if h in o else 0.0 for m, o in have if m != n]
+                    if v0.get('raise', 0) + v0.get('call', 0) < sum(others) / len(others): continue
                 v = t.get(h, {})  # руки нет в файле — значит, её не играют (0 %)
                 r, c = v.get('raise', 0.0), v.get('call', 0.0)
                 per.append((n, r, c))
