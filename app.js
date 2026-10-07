@@ -6,7 +6,7 @@ import { handClass } from './src/hands.js';
 import { GEOMETRY, DEALER_XY, SEAT_XY, SEAT_COUNT, activeSeats, seatPosition, nextActive } from './src/table.js';
 
 // Номер версии — поднимать при каждом обновлении вместе с CACHE в sw.js.
-const APP_VERSION = 15;
+const APP_VERSION = 16;
 const $ = (id) => document.getElementById(id);
 const RANK_LABEL = { 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
 const rankLabel = (r) => RANK_LABEL[r] || String(r);
@@ -25,6 +25,7 @@ const state = {
   bb: saved.bb || 2,
   stack: saved.stack || 0, // 0 — не указан
   style: saved.style || 'normal', // как блефует поставивший соперник
+  hidden: false, // карты спрятаны от соседей (смахнуть влево / вправо)
   hole: [null, null],
   board: [null, null, null, null, null],
   preflop: 'none', limpers: 1, raiseTo: 0,
@@ -427,6 +428,11 @@ const MAIL_SUBJECT = 'Покер — раздача для разбора';
 function renderTicket() {
   const ticket = $('ticket');
   const heroPos = seatPosition(state.occupied, state.button, state.hero);
+  if (state.hidden) {
+    ticket.classList.remove('busy');
+    ticket.innerHTML = `<div class="wait">Карты спрятаны<small>Смахни вправо по месту карт, чтобы вернуть их и совет</small></div>`;
+    return;
+  }
   if (state.hole.some((c) => c === null)) {
     ticket.innerHTML = `<div class="wait">Выбери свои две карты<small>Нажми на пустые карты слева внизу</small></div>`;
     return;
@@ -484,6 +490,7 @@ function renderTicket() {
     const { title, blinds, chips } = howMuch(advice, count === 0, heroPos);
     if (chips) lines.unshift(chips);
     ticket.classList.remove('busy');
+    if (state.hidden) return; // пока считали, карты успели спрятать
     ticket.innerHTML = `
       <div class="top-row">
         <div class="act ${advice.action === 'fold' ? 'fold' : ''}"><small>${advice.close ? 'Спорно — почти равно' : 'Совет'}${blinds ? ` · ${blinds}` : ''}</small>${title}</div>
@@ -533,7 +540,38 @@ function howMuch(advice, preflop, heroPos) {
 }
 
 // ---------- Твоя рука ----------
+// Спрятать карты от соседей: смахнуть влево — карты уезжают за край, вправо — возвращаются.
+function enableHideSwipe() {
+  const hand = $('hand');
+  let startX = null, startY = 0, dx = 0;
+  hand.addEventListener('pointerdown', (e) => { startX = e.clientX; startY = e.clientY; dx = 0; });
+  hand.addEventListener('pointermove', (e) => {
+    if (startX === null) return;
+    dx = e.clientX - startX;
+    // Двигаем карты вслед за пальцем, только если жест горизонтальный.
+    if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(e.clientY - startY)) {
+      const base = state.hidden ? -100 : 0;
+      $('hero-cards').style.transform = `translateX(calc(${base}vw + ${Math.max(-400, Math.min(400, dx))}px))`;
+      $('hero-cards').style.transition = 'none';
+    }
+  });
+  const end = () => {
+    if (startX === null) return;
+    $('hero-cards').style.transform = '';
+    $('hero-cards').style.transition = '';
+    if (dx < -50 && !state.hidden) { state.hidden = true; suppressClick = true; render(); }
+    else if (dx > 50 && state.hidden) { state.hidden = false; suppressClick = true; render(); }
+    startX = null;
+  };
+  hand.addEventListener('pointerup', end);
+  hand.addEventListener('pointercancel', end);
+  // После смахивания не открывать выбор карты случайным «кликом».
+  hand.addEventListener('click', (e) => { if (suppressClick) { e.stopPropagation(); e.preventDefault(); suppressClick = false; } }, true);
+}
+let suppressClick = false;
+
 function renderHand() {
+  $('hand').classList.toggle('is-hidden', state.hidden);
   $('hero-cards').innerHTML = state.hole.map((c, i) =>
     `<button aria-label="Твоя карта ${i + 1}" data-hole="${i}">${c === null ? '<span class="card big empty">+</span>' : cardHtml(c, 'big')}</button>`).join('');
   for (const b of $('hero-cards').querySelectorAll('button')) b.onclick = () => openPicker('hole', Number(b.dataset.hole));
@@ -625,6 +663,7 @@ function render() {
 }
 
 buildTable();
+enableHideSwipe();
 render();
 
 // Офлайн-режим (на localhost не включаем, чтобы при разработке не мешал кэш).

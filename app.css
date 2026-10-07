@@ -184,3 +184,13 @@ h1 em { font-style: normal; color: var(--gold); }
 .link { color: var(--gold); text-decoration: underline; font-weight: 700; padding: 0 2px; }
 
 .ticket .about { font-size: 11.5px; color: #7a6f5a; }
+
+/* Спрятать карты от соседей: смахнуть влево / вправо */
+.hand { position: relative; touch-action: pan-y; overflow: hidden; }
+.hero-cards { transition: transform .32s cubic-bezier(.2,.8,.2,1), opacity .32s ease; }
+.hand.is-hidden .hero-cards { transform: translateX(-100vw); opacity: 0; pointer-events: none; }
+.hide-tab { position: absolute; left: 0; top: 50%; width: 6px; height: 56px; margin-top: -28px; border-radius: 0 6px 6px 0;
+            background: var(--gold); opacity: 0; transition: opacity .32s ease; }
+.hand.is-hidden .hide-tab { opacity: .85; }
+.hand.is-hidden .hero-info { padding-left: 14px; }
+@media (prefers-reduced-motion: reduce) { .hero-cards, .hide-tab { transition: none; } }
