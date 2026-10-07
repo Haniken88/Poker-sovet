@@ -6,7 +6,7 @@ import { handClass } from './src/hands.js';
 import { GEOMETRY, DEALER_XY, SEAT_XY, SEAT_COUNT, activeSeats, seatPosition, nextActive } from './src/table.js';
 
 // Номер версии — поднимать при каждом обновлении вместе с CACHE в sw.js.
-const APP_VERSION = 12;
+const APP_VERSION = 13;
 const $ = (id) => document.getElementById(id);
 const RANK_LABEL = { 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
 const rankLabel = (r) => RANK_LABEL[r] || String(r);
@@ -471,8 +471,7 @@ function renderTicket() {
       const diff = Math.abs(advice.randomEquity - advice.equity) >= 0.05;
       gaugeNote = (state.toCall ? 'шанс против его ставки' : 'шанс выиграть')
         + (diff ? `<br><small>со случайными картами — ${percentText(advice.randomEquity)} %</small>` : '');
-      const price = Math.min(state.toCall, stackOrInf());
-      const need = state.toCall ? ` · нужно ${Math.round((price / (state.pot + state.toCall + price)) * 100)} %` : '';
+      const need = advice.needPct != null ? ` · колл выгоден от ${advice.needPct} %` : '';
       const draws = advice.draws.names.length ? ` · ${advice.draws.names.join(', ')}, ${advice.draws.outs} аутов` : '';
       lines = [`<b>${advice.handName}</b>${draws}${need}`, advice.reason];
       if (advice.about) lines.push(`<span class="about">Шанс посчитан ${advice.about}.</span>`);

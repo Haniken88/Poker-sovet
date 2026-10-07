@@ -149,9 +149,10 @@ test('QQ на A-8-8-4-2: решение зависит от того, как б�
   const normal = post('Qh Qd', '4d Ad 8c 8s 2c', { pot: 750, toCall: 500, opponents: 1 });
   assert.ok(normal.equity > 0.1, `шанс ${normal.equity}`); // было 1 %
   assert.ok(normal.randomEquity > 0.7, `против любых рук ${normal.randomEquity}`);
-  // Против «обычного» соперника шанс почти равен цене колла — честно «спорно» и оба варианта в объяснении.
-  assert.equal(normal.close, true);
-  assert.match(normal.reason, /часто блефует — колл|почти не блефует — пас/);
+  // Против «обычного» соперника — пас (шанс ниже цены колла с запасом, подобранным по солверу),
+  // но приложение называет, когда это меняется.
+  assert.equal(normal.action, 'fold');
+  assert.match(normal.reason, /часто блефует — колл/);
   const rare = post('Qh Qd', '4d Ad 8c 8s 2c', { pot: 750, toCall: 500, opponents: 1, style: 'rare' });
   assert.equal(rare.action, 'fold');
   const often = post('Qh Qd', '4d Ad 8c 8s 2c', { pot: 750, toCall: 500, opponents: 1, style: 'often' });
@@ -221,4 +222,16 @@ test('после флопа руки соперника — из таблиц: �
   const btn = vs(0), utg = vs(3);
   assert.ok(btn.equity > utg.equity + 0.05, `баттон ${btn.equity}, UTG ${utg.equity}`);
   assert.match(btn.about, /Баттон/);
+});
+
+// Правила, подобранные по солверу (13 тёрнов, 71 тыс. решений).
+test('по солверу: уравнял до флопа — первым чек даже с сетом; повышал сам — ставь сильной рукой', () => {
+  const asCaller = { action: 'raise', hero: positionInfo(9, 2), raiser: positionInfo(9, 0) };
+  const set = postflopAdvice({ hero: cards('2h 2c'), board: cards('Kh 7c 2d 5s'), pot: 55, toCall: 0, preflop: asCaller,
+    preflopAction: 'raise', stack: 975, random: seededRandom(4) });
+  assert.equal(set.action, 'check');
+  const asOpener = { action: 'none', hero: positionInfo(9, 0) };
+  const strong = postflopAdvice({ hero: cards('Ks Kd'), board: cards('Kh 7c 2d 5s'), pot: 55, toCall: 0, preflop: asOpener,
+    preflopAction: 'none', stack: 975, random: seededRandom(4) });
+  assert.equal(strong.action, 'bet');
 });
