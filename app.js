@@ -1,12 +1,13 @@
 // Экран приложения: стол, выбор карт, ставки и совет.
 import { makeCard, rankOf, suitOf } from './src/cards.js';
+import { nicknameFor } from './src/nicknames.js';
 import { preflopAdvice, preflopEquity } from './src/preflop.js';
 import { postflopAdvice, whoBeatsYou, percentText } from './src/postflop.js';
 import { handClass } from './src/hands.js';
 import { GEOMETRY, DEALER_XY, SEAT_XY, SEAT_COUNT, activeSeats, seatPosition, nextActive } from './src/table.js';
 
 // Номер версии — поднимать при каждом обновлении вместе с CACHE в sw.js.
-const APP_VERSION = 17;
+const APP_VERSION = 18;
 const $ = (id) => document.getElementById(id);
 const RANK_LABEL = { 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
 const rankLabel = (r) => RANK_LABEL[r] || String(r);
@@ -571,6 +572,10 @@ function renderHand() {
   for (const b of $('hero-cards').querySelectorAll('button')) b.onclick = () => openPicker('hole', Number(b.dataset.hole));
   const pos = seatPosition(state.occupied, state.button, state.hero);
   $('hero-pos').innerHTML = `<small>Место ${state.hero} · ${activeCount()} за столом</small>${pos ? pos.name : '—'}`;
+  // Шуточное прозвище руки («Ракеты», «Сикс-севен»…). Пока карты спрятаны — тоже спрятано: выдаёт руку.
+  const nick = !state.hidden && state.hole.every((c) => c !== null) ? nicknameFor(rankOf(state.hole[0]), rankOf(state.hole[1])) : null;
+  const [title, note] = (nick || '').split(' · ');
+  $('nickname').innerHTML = nick ? `«${title}»${note ? `<small>${note}</small>` : ''}` : '';
 }
 
 // Итог раздачи: выиграл / проиграл / сбросил — стек меняется сам.

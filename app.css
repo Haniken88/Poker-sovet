@@ -194,3 +194,8 @@ h1 em { font-style: normal; color: var(--gold); }
 .hand.is-hidden .hide-tab { opacity: .85; }
 .hand.is-hidden .hero-info { padding-left: 14px; }
 @media (prefers-reduced-motion: reduce) { .hero-cards, .hide-tab { transition: none; } }
+
+/* Шуточное прозвище руки */
+.nickname { font: italic 400 16px/1.2 Prata; color: var(--gold); min-height: 0; }
+.nickname:empty { display: none; }
+.nickname small { display: block; font: 500 11px/1.3 Manrope; font-style: normal; color: var(--muted); margin-top: 2px; }
