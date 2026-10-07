@@ -1,6 +1,6 @@
 // Офлайн-режим: сначала пробуем интернет (всегда свежая версия),
 // без связи — берём сохранённую копию из телефона.
-const CACHE = 'poker-v21';
+const CACHE = 'poker-v22';
 const FILES = [
   './', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest',
   'src/cards.js', 'src/evaluator.js', 'src/equity.js', 'src/hands.js', 'src/handRanks.js',
