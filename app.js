@@ -6,7 +6,7 @@ import { handClass } from './src/hands.js';
 import { GEOMETRY, DEALER_XY, SEAT_XY, SEAT_COUNT, activeSeats, seatPosition, nextActive } from './src/table.js';
 
 // Номер версии — поднимать при каждом обновлении вместе с CACHE в sw.js.
-const APP_VERSION = 16;
+const APP_VERSION = 17;
 const $ = (id) => document.getElementById(id);
 const RANK_LABEL = { 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
 const rankLabel = (r) => RANK_LABEL[r] || String(r);
@@ -428,11 +428,6 @@ const MAIL_SUBJECT = 'Покер — раздача для разбора';
 function renderTicket() {
   const ticket = $('ticket');
   const heroPos = seatPosition(state.occupied, state.button, state.hero);
-  if (state.hidden) {
-    ticket.classList.remove('busy');
-    ticket.innerHTML = `<div class="wait">Карты спрятаны<small>Смахни вправо по месту карт, чтобы вернуть их и совет</small></div>`;
-    return;
-  }
   if (state.hole.some((c) => c === null)) {
     ticket.innerHTML = `<div class="wait">Выбери свои две карты<small>Нажми на пустые карты слева внизу</small></div>`;
     return;
@@ -490,7 +485,6 @@ function renderTicket() {
     const { title, blinds, chips } = howMuch(advice, count === 0, heroPos);
     if (chips) lines.unshift(chips);
     ticket.classList.remove('busy');
-    if (state.hidden) return; // пока считали, карты успели спрятать
     ticket.innerHTML = `
       <div class="top-row">
         <div class="act ${advice.action === 'fold' ? 'fold' : ''}"><small>${advice.close ? 'Спорно — почти равно' : 'Совет'}${blinds ? ` · ${blinds}` : ''}</small>${title}</div>
