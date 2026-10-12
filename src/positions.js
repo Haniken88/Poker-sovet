@@ -2,10 +2,14 @@
 // (0 = баттон, 1 = малый блайнд, 2 = большой блайнд, дальше ранние места).
 
 /**
- * Возвращает { key, name, group, behind }:
+ * Возвращает { key, name, group, behind, players }:
  * behind — сколько игроков ходят после тебя префлоп (меньше = позиция лучше).
  */
 export function positionInfo(players, offset) {
+  return { ...seatInfo(players, offset), players };
+}
+
+function seatInfo(players, offset) {
   if (players < 2 || players > 10) throw new Error('За столом должно быть от 2 до 10 игроков');
   if (offset < 0 || offset >= players) throw new Error('Нет такого места');
 

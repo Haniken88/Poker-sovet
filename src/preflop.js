@@ -5,6 +5,8 @@ import { rankOf } from './cards.js';
 import { topClasses, combosIn, PREFLOP_SHARE, chartCombos } from './ranges.js';
 import { calcEquity } from './equity.js';
 import { PREFLOP_DATA } from './preflopData.js';
+import { nashHU } from './nashHU.js';
+import { huCall } from './huCall.js';
 
 // ---------- Таблицы солверов ----------
 // Места полного стола (9) переводим в места таблиц (6-max): ранние места — как самое раннее (LJ).
@@ -28,6 +30,9 @@ const mix = (v) => `рейз ${v.raise} %, колл ${v.call} %, пас ${v.fold
 // крупнее открытие — так советуют профи против слабых живых соперников.
 export const LIVE_GAME = true;
 const OPEN_SIZE = 3.5; // в живой игре открывают крупнее, чем 2,5–3 ББ онлайн
+const OPEN_SIZE_HU = 2.5; // один на один (3,5 ББ — размер для полного стола)
+// Один на один до этого стека — «ва-банк или пас» по таблице Нэша (src/nashHU.js, проверено 2026-10-12).
+export const HU_PUSH_FOLD_BB = 20;
 const solvers = (v) => `по таблицам ${v.sources} солверов`;
 
 import { OPEN } from './openTables.js';
@@ -64,6 +69,8 @@ const inRange = (cls, text) => {
 };
 
 const chips = (amount) => Math.round(amount * 10) / 10;
+// Для текста: дробные по-русски (2,5).
+const ru = (amount) => String(chips(amount)).replace('.', ',');
 
 /**
  * hero — 2 карты; position — из positionInfo;
@@ -99,8 +106,32 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
     };
   };
 
-  // Короткий стек (15 больших блайндов и меньше): играем «ва-банк или пас».
   const stackBB = stack / bb;
+  const headsUp = position.players === 2;
+
+  // Один на один, стек до 20 ББ: малый блайнд — ва-банк или пас по таблице Нэша;
+  // против ва-банка (или повышения) — колл по «средней» таблице (src/huCall.js):
+  // соперник идёт ва-банк уже, чем по Нэшу, но шире осторожного игрока.
+  if (headsUp && stackBB <= HU_PUSH_FOLD_BB && !(isBB && action !== 'raise' && action !== '3bet')) {
+    const es = ru(stackBB);
+    if (action === 'none') {
+      return nashHU(stackBB).push.has(cls)
+        ? result('allin', stack, `Один на один, стек ${es} ББ: по таблице Нэша с ${cls} — ва-банк. Соперник часто сбросит, и банк твой без вскрытия.`)
+        : result('fold', 0, `Один на один, стек ${es} ББ: по таблице Нэша ${cls} слишком слабая даже для ва-банка — пас.`);
+    }
+    const { call, row } = huCall(stackBB);
+    const facingAllIn = raiseTo >= stack;
+    if (call.has(cls)) {
+      return facingAllIn
+        ? result('allin', stack, `Один на один, стек ${es} ББ: с ${cls} ва-банк соперника выгодно уравнять — шанс выше цены колла, если он идёт ва-банк хотя бы с ${ru(row.shovePct)} % рук.`)
+        : result('allin', stack, `Один на один, стек ${es} ББ: с ${cls} — ва-банк. С этой рукой выгодно уравнять даже его ва-банк, а так он ещё и может сбросить.`);
+    }
+    return result('fold', 0, facingAllIn
+      ? `Один на один, стек ${es} ББ: против ва-банка ${cls} слабовата — шанс ниже цены колла, пас.`
+      : `Один на один, стек ${es} ББ: против повышения ${cls} слабовата — пас.`);
+  }
+
+  // Короткий стек (15 больших блайндов и меньше): играем «ва-банк или пас».
   if (stackBB <= 15) {
     if (action === 'none' || action === 'limp') {
       if (isBB && action === 'none') return result('check', 0, 'Все сбросили до тебя — ты уже забрал блайнды.');
@@ -110,15 +141,15 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
       const pairRank = cls.length === 2 ? hero.map(rankOf)[0] : 0;
       const pairShove = pairRank && (stackBB <= 10 || pairRank >= 5);
       if (pairShove || topClasses(share, true).has(cls)) {
-        return result('allin', stack, `Стек всего ${chips(stackBB)} ББ: с ${cls} выгоднее сразу ва-банк — соперники чаще сбросят.`);
+        return result('allin', stack, `Стек всего ${ru(stackBB)} ББ: с ${cls} выгоднее сразу ва-банк — ${headsUp ? 'соперник чаще сбросит' : 'соперники чаще сбросят'}.`);
       }
-      return result(isBB ? 'check' : 'fold', 0, `Стек ${chips(stackBB)} ББ — тут играют «ва-банк или пас», а ${cls} для ва-банка слабовата.`);
+      return result(isBB ? 'check' : 'fold', 0, `Стек ${ru(stackBB)} ББ — тут играют «ва-банк или пас», а ${cls} для ва-банка слабовата.`);
     }
     const share = (action === '3bet' ? 0.04 : 0.07) + (stackBB <= 10 ? 0.04 : 0);
     if (topClasses(share, true).has(cls)) {
       return result('allin', stack, `Короткий стек и сильная рука: ${cls} — ва-банк.`);
     }
-    return result('fold', 0, `Со стеком ${chips(stackBB)} ББ против повышения ${cls} — пас.`);
+    return result('fold', 0, `Со стеком ${ru(stackBB)} ББ против повышения ${cls} — пас.`);
   }
 
   if (action === 'none') {
@@ -138,7 +169,7 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
       const why = strict ? `${cls} с этого места открывают: ${solvers(v)} рейз в ${v.raise} % случаев.`
         : live ? `${cls} — открытие для живой игры: солверы с этого места открывают её редко (${v.raise} %), но против слабых соперников профи играют шире.`
         : `${cls} с этого места не открывают: ${solvers(v)} рейз только в ${v.raise} % случаев.`;
-      return { ...result(opens ? 'raise' : 'fold', opens ? OPEN_SIZE * bb : 0, why), close: v.close || (live && !strict) };
+      return { ...result(opens ? 'raise' : 'fold', opens ? (headsUp ? OPEN_SIZE_HU : OPEN_SIZE) * bb : 0, why), close: v.close || (live && !strict) };
     }
     // Ранние места полного стола: в живой игре — на одну ступень свободнее.
     if (LIVE_GAME && !inRange(cls, openRange(position.behind)) && inRange(cls, openRange(position.behind - 1))) {
@@ -196,6 +227,14 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
     }
     const amount = act === 'raise' ? threeBetSize : act === 'call' ? raiseTo : 0;
     const head = act === 'raise' ? `${cls} — повышай снова (3-бет).` : act === 'call' ? `${cls} — уравнивай.` : `${cls} против этого повышения сбрасывают.`;
+    // Повышение крупнее 4 ББ: таблицы солверов посчитаны для обычного (2,5–3 ББ) — не ссылаемся на них.
+    if (raiseBB > 4) {
+      const share = Math.round((cost / stack) * 100);
+      const commit = share >= 25 ? ` Колл — это ${share} % твоего стека: после него почти любой флоп пойдёт ва-банк, поэтому нужна рука, сильная сама по себе.` : '';
+      const weakAce = act === 'fold' && /^A[2-9][so]$/.test(cls) ? ` ${cls} проигрывает любому тузу со старшей второй картой.` : '';
+      const why = act === 'fold' ? ' Такое повышение обычно делают с сильной рукой.' : '';
+      return { ...result(act, amount, `${head} Повышение до ${ru(raiseBB)} ББ — в ${ru(raiseBB / 2.75)} раза крупнее обычного (2,5–3 ББ).${why}${commit}${weakAce}${who}`), close };
+    }
     return { ...result(act, amount, `${head} По таблицам ${v.sources} солверов: ${mix(v)}.${note}${who}`), close };
   }
 

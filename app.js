@@ -7,7 +7,7 @@ import { handClass } from './src/hands.js';
 import { GEOMETRY, DEALER_XY, SEAT_XY, SEAT_COUNT, activeSeats, seatPosition, nextActive } from './src/table.js';
 
 // Номер версии — поднимать при каждом обновлении вместе с CACHE в sw.js.
-const APP_VERSION = 22;
+const APP_VERSION = 23;
 const $ = (id) => document.getElementById(id);
 const RANK_LABEL = { 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
 const rankLabel = (r) => RANK_LABEL[r] || String(r);
@@ -314,10 +314,14 @@ function renderInputs() {
   const others = Math.max(1, activeCount() - 1);
   if (preflop) {
     const current = PREFLOP_CHOICES.find(([k]) => k === state.preflop);
+    const heroPos = seatPosition(state.occupied, state.button, state.hero);
+    const huButton = heroPos && heroPos.players === 2 && heroPos.key === 'BTN';
+    const huBB = heroPos && heroPos.players === 2 && heroPos.key === 'BB';
     box.innerHTML = `
       <div><div class="label">Что сделали игроки до тебя</div>
         <div class="segments">${PREFLOP_CHOICES.map(([k, t]) => `<button data-pre="${k}" aria-pressed="${state.preflop === k}">${t}</button>`).join('')}</div>
-        <div class="explain">${current[2]}${raiserLine()}</div></div>
+        <div class="explain">${huButton && state.preflop === 'none' ? 'Один на один ты ходишь <b>первым</b> — до тебя никто не ходил.'
+          : huBB && state.preflop === 'none' ? 'Один на один соперник на баттоне ходит <b>раньше тебя</b> — отметь, что он сделал.' : current[2]}${raiserLine()}</div></div>
       ${state.preflop === 'limp' ? `<div class="steppers">${stepper('limpers', 'Сколько игроков уравняли', 1, 1, others)}</div>` : ''}
       ${state.preflop === 'raise' || state.preflop === '3bet' ? `<div class="steppers">${stepper('raiseTo', 'Повысили до', state.bb, state.bb)}</div>` : ''}`;
     for (const b of box.querySelectorAll('[data-pre]')) b.onclick = () => {
@@ -393,7 +397,7 @@ async function copyHand() {
     `Блайнды ${fmt(state.bb / 2)}/${fmt(state.bb)}, мой стек ${state.stack ? fmt(state.stack) : 'не указан'}`,
     `Мои карты: ${state.hole.map(cardText).join(' ')}`,
     board.length ? `На столе: ${board.map(cardText).join(' ')}` : 'На столе: ничего (префлоп)',
-    `До меня префлоп: ${pre}${state.preflop === 'limp' ? ` (${state.limpers})` : ''}${state.raiseTo && /raise|3bet/.test(state.preflop) ? ` до ${fmt(state.raiseTo)}` : ''}`,
+    pos && pos.players === 2 && pos.key === 'BTN' && state.preflop === 'none' ? 'До меня префлоп: никто (один на один я хожу первым)' : `До меня префлоп: ${pre}${state.preflop === 'limp' ? ` (${state.limpers})` : ''}${state.raiseTo && /raise|3bet/.test(state.preflop) ? ` до ${fmt(state.raiseTo)}` : ''}`,
     board.length ? `Банк ${fmt(state.pot)}, соперник поставил ${fmt(state.toCall)}, соперников ${state.opponents}, блефует: ${{ rare: 'редко', normal: 'обычно', often: 'часто' }[state.style]}` : '',
     a ? `Совет приложения: ${a.title} · шанс ${percentText(a.equity)} % — ${a.advice.reason}` : '',
     'Я думаю: ',
@@ -438,6 +442,17 @@ function renderTicket() {
     return;
   }
   const count = boardCount();
+  // Один на один префлоп баттон ходит первым: на ББ «все сбросили» не бывает, а до баттона никто не ходит.
+  if (count === 0 && heroPos.players === 2) {
+    if (heroPos.key === 'BB' && state.preflop === 'none') {
+      ticket.innerHTML = `<div class="wait">Что сделал соперник?<small>Один на один баттон ходит раньше тебя: отметь ниже «Уравняли» или «Повысили». Если он сбросил — банк твой.</small></div>`;
+      return;
+    }
+    if (heroPos.key === 'BTN' && ['limp', 'raise'].includes(state.preflop)) {
+      ticket.innerHTML = `<div class="wait">До тебя никто не ходил<small>Один на один ты ходишь первым: выбери «Пас». Если ты повысил, а соперник ответил повышением, — «Повысили ×2».</small></div>`;
+      return;
+    }
+  }
   if (count === 1 || count === 2) {
     ticket.innerHTML = `<div class="wait">Добавь остальные карты флопа<small>Флоп — это 3 карты</small></div>`;
     return;
