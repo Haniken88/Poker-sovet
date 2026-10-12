@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Тренажёр — макет Pro</title>
+<link rel="stylesheet" href="../fonts/fonts.css">
+<style>
+:root { --bg: #0f1a14; --panel: #18241d; --panel-line: #2f4637; --felt: #12573a; --felt-deep: #0b3a27; --wood: #4a2a17;
+  --ivory: #f5eedc; --gold: #d8b25a; --text: #f3ead2; --muted: #a9b8a4; --red: #b3242f; --ink: #1d150c; --plus: #7fd6a2; }
+* { box-sizing: border-box; margin: 0; }
+body { background: var(--bg); color: var(--text); font: 500 15px/1.4 Manrope, system-ui, sans-serif; padding: 18px 16px 40px; }
+.top { display: flex; justify-content: space-between; align-items: center; }
+h1 { font: 400 30px/1.1 Prata; }
+.pro { font: 800 11px Manrope; letter-spacing: .12em; color: var(--ink); background: var(--gold); padding: 5px 9px; border-radius: 999px; }
+.topics { display: flex; gap: 6px; margin: 14px 0 12px; overflow: hidden; }
+.topics span { white-space: nowrap; padding: 7px 11px; border-radius: 999px; background: var(--panel); border: 1px solid var(--panel-line); color: var(--muted); font: 700 12px Manrope; }
+.topics .on { background: var(--ivory); color: var(--ink); border-color: var(--ivory); }
+.progress { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.progress b { color: var(--text); }
+.dots { display: grid; grid-template-columns: repeat(20, 1fr); gap: 3px; margin-bottom: 14px; }
+.dots i { height: 5px; border-radius: 3px; background: #26362c; }
+.dots i.ok { background: var(--plus); } .dots i.no { background: #ff8a8f; } .dots i.now { background: var(--gold); }
+.table { background: radial-gradient(ellipse at center, var(--felt) 0%, var(--felt-deep) 80%); border: 7px solid var(--wood); border-radius: 90px; padding: 18px 14px 16px; text-align: center; }
+.sit { font-size: 13px; color: #d9e6d4; line-height: 1.5; }
+.sit b { color: var(--ivory); }
+.chips { display: flex; justify-content: center; gap: 6px; margin: 8px 0 12px; flex-wrap: wrap; }
+.chips span { font: 700 11.5px Manrope; background: rgba(0,0,0,.28); color: var(--ivory); padding: 4px 9px; border-radius: 999px; }
+.hole { display: flex; justify-content: center; gap: 8px; }
+.card { width: 66px; height: 92px; border-radius: 9px; background: var(--ivory); color: var(--ink); font: 400 32px/1 Prata; display: grid; place-items: center; box-shadow: 0 6px 14px rgba(0,0,0,.4); padding-top: 4px; }
+.card i { font-style: normal; font-size: 26px; display: block; }
+.card.r { color: var(--red); }
+.q { font: 400 22px Prata; text-align: center; margin: 16px 0 10px; }
+.answers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.answers span { text-align: center; padding: 14px 4px; border-radius: 12px; background: var(--panel); border: 1px solid var(--panel-line); font: 700 14px Manrope; }
+.answers .picked { background: #1f3a2a; border: 2px solid var(--plus); color: var(--plus); }
+.answers .dim { opacity: .45; }
+.verdict { background: var(--ivory); color: var(--ink); border-radius: 18px; padding: 16px; margin-top: 14px; }
+.verdict .head { font: 400 26px/1 Prata; color: #1f6b44; }
+.verdict .head small { font: 700 11px Manrope; letter-spacing: .1em; color: #8a6a1f; display: block; margin-bottom: 4px; text-transform: uppercase; }
+.verdict p { font-size: 13.5px; line-height: 1.45; margin-top: 8px; color: #3e3424; }
+.verdict p b { color: var(--ink); }
+.verdict .next { margin-top: 14px; text-align: center; background: var(--gold); color: var(--ink); font: 800 15px Manrope; padding: 13px; border-radius: 12px; }
+.note { color: var(--muted); font-size: 12px; margin-top: 16px; text-align: center; }
+</style>
+</head>
+<body>
+  <div class="top"><h1>Тренажёр</h1><span class="pro">PRO</span></div>
+  <div class="topics"><span class="on">Короткий стек</span><span>Против ва-банка</span><span>Открытие</span><span>Всё подряд</span></div>
+
+  <div class="progress"><span>Вопрос <b>7</b> из 20</span><span>Верно: <b>5</b> из 6</span></div>
+  <div class="dots"><i class="ok"></i><i class="ok"></i><i class="no"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="now"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+
+  <div class="table">
+    <div class="sit"><b>Баттон</b> · 9 игроков · до тебя все сбросили</div>
+    <div class="chips"><span>Стек 10 ББ</span><span>Анте 1 ББ</span><span>Блайнды 25 000/50 000</span></div>
+    <div class="hole"><div class="card">K<i>♣</i></div><div class="card r">7<i>♦</i></div></div>
+  </div>
+
+  <div class="q">Что делаешь?</div>
+  <div class="answers"><span class="dim">Пас</span><span class="dim">Рейз 2 ББ</span><span class="picked">Ва-банк ✓</span></div>
+
+  <div class="verdict">
+    <div class="head"><small>Верно</small>Ва-банк</div>
+    <p><b>K7 с баттона при 10 ББ с анте — ва-банк по таблице Нэша.</b> После тебя только блайнды, а в банке уже
+      2,5 ББ (блайнды и анте). Чаще всего они сбросят, и банк твой без борьбы. Без анте K7 разных мастей здесь уже пас: анте добавляет в банк целый блайнд.</p>
+    <div class="next">Дальше</div>
+  </div>
+
+  <p class="note">Макет. Раздачи тренажёр придумывает сам, ответы — по тем же проверенным таблицам, что и советы.<br>Те, где ты ошибся, вернутся снова через несколько вопросов.</p>
+</body>
+</html>
