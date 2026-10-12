@@ -5,11 +5,12 @@ import { preflopAdvice, preflopEquity } from './src/preflop.js';
 import { postflopAdvice, whoBeatsYou, percentText } from './src/postflop.js';
 import { handClass } from './src/hands.js';
 import { preflopPot, currentPot, streetMoney } from './src/pot.js';
+import { stepBB } from './src/blinds.js';
 import { proStatus, checkCode, PRO_PRICE, SHORT_STACK_PRO_BB, TRIAL_DAYS, PRO_ENFORCED } from './src/pro.js';
 import { GEOMETRY, DEALER_XY, SEAT_XY, SEAT_COUNT, activeSeats, seatPosition, nextActive } from './src/table.js';
 
 // Номер версии — поднимать при каждом обновлении вместе с CACHE в sw.js.
-const APP_VERSION = 33;
+const APP_VERSION = 34;
 const $ = (id) => document.getElementById(id);
 const RANK_LABEL = { 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
 const rankLabel = (r) => RANK_LABEL[r] || String(r);
@@ -472,7 +473,8 @@ function bindSteppers(box) {
   };
   for (const b of box.querySelectorAll('button[data-step]')) b.onclick = () => {
     const key = b.dataset.key;
-    state[key] = Math.min(Number(b.dataset.max), Math.max(Number(b.dataset.min), state[key] + Number(b.dataset.step)));
+    state[key] = key === 'bb' ? stepBB(state.bb, Number(b.dataset.step) > 0 ? 1 : -1)
+      : Math.min(Number(b.dataset.max), Math.max(Number(b.dataset.min), state[key] + Number(b.dataset.step)));
     if (key === 'pot') state.potFix = { street: state.street, value: state.pot };
     if (box === sheet) { box.querySelector(`input[data-key="${key}"]`).value = fmt(state[key]); persist(); }
     render();
