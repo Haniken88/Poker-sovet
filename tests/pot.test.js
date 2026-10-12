@@ -61,3 +61,18 @@ test('соперник поставил, совет был «рейз» — сч
   assert.equal(streetMoney({ toCall: 150000, heroMove: { action: 'raise', amount: 450000 }, stayed: 1 }), 300000);
   assert.equal(preflopPot({ bb: 2, action: 'raise', raiseTo: 6, heroMove: { action: 'raise', amount: 24 }, players: 2, heroKey: 'BB' }), 13);
 });
+
+test('уравнявшие до флопа: шанс считается против всех, кто в банке', async () => {
+  const { preflopEquity } = await import('../src/preflop.js');
+  const { seededRandom } = await import('../src/equity.js');
+  const hero = parseCards('As Kd');
+  const one = preflopEquity({ hero, action: 'raise', iterations: 20000, random: seededRandom(1) });
+  const three = preflopEquity({ hero, action: 'raise', callers: 2, iterations: 20000, random: seededRandom(1) });
+  assert.equal(three.opponents, 3);
+  assert.ok(three.equity < one.equity - 0.1, `${three.equity} против ${one.equity}`);
+  assert.match(three.label, /2 уравнявших/);
+});
+
+test('повысил до 125 000, уравняли ты и ещё двое: на флопе 4 игрока — 575 000 с анте', () => {
+  assert.equal(preflopPot({ bb: 50000, ante: 50000, action: 'raise', raiseTo: 125000, players: 4, heroKey: 'BB' }), 575000);
+});

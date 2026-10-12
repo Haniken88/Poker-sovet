@@ -15,7 +15,7 @@ console.log('Карты:', hero.map(cardToString).join(' '), '| стол:', boar
   '| позиция:', pos.name, '| игроков:', activeSeats(d.occupied).length);
 if (!board.length) {
   const a = preflopAdvice({ hero, position: pos, action: d.preflop, limpers: d.limpers, raiseTo: d.raiseTo, bigBlind: d.bb, stack, ante: d.anteOn ? d.bb : 0 });
-  const e = preflopEquity({ hero, action: d.preflop, limpers: d.limpers, iterations: 20000 });
+  const e = preflopEquity({ hero, action: d.preflop, limpers: d.limpers, iterations: 20000, callers: d.callers || 0 });
   console.log(a.text, a.close ? '(спорно)' : '', '|', percentText(e.equity), '%', e.label, '|', a.reason);
 } else {
   const a = postflopAdvice({ hero, board, opponents: d.opponents, pot: d.pot, toCall: d.toCall,

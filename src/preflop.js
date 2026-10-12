@@ -364,19 +364,27 @@ export const ACTION_TEXT = {
  * (кто-то из блайндов уравняет), при лимпах — против лимперов, при повышении —
  * против диапазона повысившего. Возвращает { equity, opponents, label }.
  */
-export function preflopEquity({ hero, action = 'none', limpers = 1, iterations = 3000, random = Math.random, opener = null }) {
+export function preflopEquity({ hero, action = 'none', limpers = 1, iterations = 3000, random = Math.random, opener = null, callers = 0 }) {
+  // callers — сколько игроков уже уравняли повышение (отмечены на столе): шанс против всех, кто в банке.
+  const extra = action === 'raise' || action === '3bet' ? Math.max(0, callers) : 0;
+  const withCallers = (main, callerRange, label) => {
+    const ranges = [{ groups: [main], weights: [1] }, ...Array.from({ length: extra }, () => ({ groups: [callerRange], weights: [1] }))];
+    const { equity } = calcEquity({ hero, opponents: 1 + extra, ranges, iterations, random });
+    const tail = extra ? ` и ${extra} ${extra === 1 ? 'уравнявшего' : 'уравнявших'}` : '';
+    return { equity, opponents: 1 + extra, label: label + tail };
+  };
   // Знаем, кто повысил, — его руки из таблиц солверов (открытие с его места).
   if (action === 'raise' && opener) {
     const range = opener.behind >= 6 ? combosIn(parseRange(OPEN[Math.min(8, opener.behind)])) : chartCombos(`open:${chartPos(opener)}`, 'raise');
     if (range) {
-      const { equity } = calcEquity({ hero, opponents: 1, ranges: [{ groups: [range], weights: [1] }], iterations, random });
-      return { equity, opponents: 1, label: `против рук открытия: ${opener.name}` };
+      // Уравнявшие — руки, с которыми уравнивают это открытие (таблица ББ), иначе лучшие 35 %.
+      const callerRange = chartCombos(`vsopen:BB:${chartPos(opener)}`, 'call') || combosIn(topClasses(PREFLOP_SHARE.caller));
+      return withCallers(range, callerRange, `против рук открытия: ${opener.name}`);
     }
   }
   if (action === 'raise' || action === '3bet') {
     const range = combosIn(topClasses(action === '3bet' ? PREFLOP_SHARE.threeBettor : PREFLOP_SHARE.raiser));
-    const { equity } = calcEquity({ hero, opponents: 1, ranges: [{ groups: [range], weights: [1] }], iterations, random });
-    return { equity, opponents: 1, label: 'против руки повысившего' };
+    return withCallers(range, combosIn(topClasses(PREFLOP_SHARE.caller)), 'против руки повысившего');
   }
   const opponents = action === 'limp' ? Math.max(1, limpers) : 1;
   const open = combosIn(topClasses(PREFLOP_SHARE.open));

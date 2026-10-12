@@ -8,7 +8,7 @@ import { preflopPot, currentPot, streetMoney } from './src/pot.js';
 import { GEOMETRY, DEALER_XY, SEAT_XY, SEAT_COUNT, activeSeats, seatPosition, nextActive } from './src/table.js';
 
 // Номер версии — поднимать при каждом обновлении вместе с CACHE в sw.js.
-const APP_VERSION = 25;
+const APP_VERSION = 26;
 const $ = (id) => document.getElementById(id);
 const RANK_LABEL = { 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
 const rankLabel = (r) => RANK_LABEL[r] || String(r);
@@ -34,6 +34,7 @@ const state = {
   board: [null, null, null, null, null],
   preflop: 'none', limpers: 1, raiseTo: 0,
   raiser: 0, reraiser: 0, // места повысивших (0 — не отмечено)
+  callers: [], // места тех, кто уравнял повышение (касанием на столе после повысившего)
   pot: 0, toCall: 0, opponents: 1,
   // Банк считается сам (src/pot.js): улица (-1 префлоп, 0 флоп, 1 тёрн, 2 ривер), что сделал ты префлоп,
   // прошедшие улицы после флопа и ручная поправка банка.
@@ -80,7 +81,7 @@ function buildTable() {
     seat.className = 'seat';
     seat.dataset.seat = n;
     Object.assign(seat.style, pct(SEAT_XY[n]));
-    seat.addEventListener('click', () => (pickRaiser(n) ? render() : openSeatMenu(n)));
+    seat.addEventListener('click', () => (pickRaiser(n) || toggleCaller(n) ? render() : openSeatMenu(n)));
     table.appendChild(seat);
   }
 
@@ -115,6 +116,15 @@ function pickRaiser(n) {
   state[need] = n;
   return true;
 }
+// Повысивший отмечен — следующие касания отмечают тех, кто уравнял (повторное касание снимает).
+const canMarkCallers = () => boardCount() === 0 && ['raise', '3bet'].includes(state.preflop) && state.raiser && !raiserToPick();
+function toggleCaller(n) {
+  if (!canMarkCallers() || !state.occupied[n - 1] || [state.hero, state.raiser, state.reraiser].includes(n)) return false;
+  state.callers = state.callers.includes(n) ? state.callers.filter((c) => c !== n) : [...state.callers, n];
+  return true;
+}
+// Отмечены места, которых уже нет за столом, — убираем.
+const liveCallers = () => state.callers.filter((c) => state.occupied[c - 1] && ![state.hero, state.raiser, state.reraiser].includes(c));
 
 function renderTable() {
   for (const el of table.querySelectorAll('.seat')) {
@@ -125,6 +135,7 @@ function renderTable() {
     el.classList.toggle('is-out', !occupied);
     el.classList.toggle('is-raiser', n === state.raiser && state.preflop !== 'none');
     el.classList.toggle('is-reraiser', n === state.reraiser && state.preflop === '3bet');
+    el.classList.toggle('is-caller', ['raise', '3bet'].includes(state.preflop) && liveCallers().includes(n));
     el.classList.toggle('can-pick', Boolean(raiserToPick()) && occupied && n !== state.raiser
       && !(n === state.hero && !(state.preflop === '3bet' && !state.raiser)));
     el.innerHTML = `<b>${n}</b><span>${occupied ? (pos ? SHORT[pos.key] || pos.key : '') : 'пусто'}</span>`;
@@ -275,6 +286,10 @@ const heroMoveFor = (street) => (lastAdvice && lastAdvice.street === street
   ? { action: lastAdvice.advice.action, amount: lastAdvice.advice.amount } : null);
 // Сколько соперников на флопе по умолчанию: при лимпах — лимперы (и ББ, если это не ты), иначе один.
 function flopOpponents() {
+  if (['raise', '3bet'].includes(state.preflop)) {
+    const inHand = new Set([state.raiser, state.reraiser, ...liveCallers()].filter((n) => n && n !== state.hero));
+    return Math.max(1, Math.min(activeCount() - 1, inHand.size));
+  }
   if (state.preflop !== 'limp') return 1;
   const pos = seatPosition(state.occupied, state.button, state.hero);
   return Math.max(1, Math.min(activeCount() - 1, state.limpers + (pos?.key === 'BB' ? 0 : 1)));
@@ -376,7 +391,11 @@ function raiserLine() {
   const who = state.preflop === '3bet'
     ? `Повысил: ${seatLabel(state.raiser)}, ещё раз — ${seatLabel(state.reraiser)}.`
     : `Повысил: ${seatLabel(state.raiser)}.`;
-  return `<br>${who} <button class="link" id="repick">изменить</button>`;
+  const calls = liveCallers();
+  const callLine = calls.length
+    ? `<br>Уравняли: ${calls.map(seatLabel).join(', ')}.`
+    : '<br><b class="pick">Кто-то уравнял? Нажми на их места</b> (повторное касание — снять).';
+  return `<br>${who} <button class="link" id="repick">изменить</button>${callLine}`;
 }
 
 function renderInputs() {
@@ -397,7 +416,7 @@ function renderInputs() {
       ${state.preflop === 'raise' || state.preflop === '3bet' ? `<div><div class="steppers">${stepper('raiseTo', 'Повысили до', state.bb, state.bb)}</div>
         ${quick('raiseTo', [...(state.preflop === 'raise' ? [['2 ББ', 2 * state.bb], ['2,5 ББ', 2.5 * state.bb], ['3 ББ', 3 * state.bb]] : []), ['Ва-банк', state.stack]])}</div>` : ''}`;
     for (const b of box.querySelectorAll('[data-pre]')) b.onclick = () => {
-      if (state.preflop !== b.dataset.pre) { state.raiser = 0; state.reraiser = 0; }
+      if (state.preflop !== b.dataset.pre) { state.raiser = 0; state.reraiser = 0; state.callers = []; }
       state.preflop = b.dataset.pre;
       if (state.preflop === 'raise' && state.raiseTo < 2 * state.bb) state.raiseTo = 3 * state.bb;
       if (state.preflop === '3bet' && state.raiseTo < 6 * state.bb) state.raiseTo = 9 * state.bb;
@@ -415,7 +434,7 @@ function renderInputs() {
   }
   bindSteppers(box);
   const repick = box.querySelector('#repick');
-  if (repick) repick.onclick = () => { state.raiser = 0; state.reraiser = 0; render(); };
+  if (repick) repick.onclick = () => { state.raiser = 0; state.reraiser = 0; state.callers = []; render(); };
 }
 
 function bindSteppers(box) {
@@ -502,13 +521,13 @@ async function copyHand() {
     `Блайнды ${fmt(state.bb / 2)}/${fmt(state.bb)}${state.anteOn ? `, анте ${fmt(state.bb)}` : ''}, мой стек ${state.stack ? fmt(state.stack) : 'не указан'}`,
     `Мои карты: ${state.hole.map(cardText).join(' ')}`,
     board.length ? `На столе: ${board.map(cardText).join(' ')}` : 'На столе: ничего (префлоп)',
-    pos && pos.players === 2 && pos.key === 'BTN' && state.preflop === 'none' ? 'До меня префлоп: никто (один на один я хожу первым)' : `До меня префлоп: ${pre}${state.preflop === 'limp' ? ` (${state.limpers})` : ''}${state.raiseTo && /raise|3bet/.test(state.preflop) ? ` до ${fmt(state.raiseTo)}` : ''}`,
+    pos && pos.players === 2 && pos.key === 'BTN' && state.preflop === 'none' ? 'До меня префлоп: никто (один на один я хожу первым)' : `До меня префлоп: ${pre}${state.preflop === 'limp' ? ` (${state.limpers})` : ''}${state.raiseTo && /raise|3bet/.test(state.preflop) ? ` до ${fmt(state.raiseTo)}` : ''}${liveCallers().length && /raise|3bet/.test(state.preflop) ? `, уравняли ещё ${liveCallers().length}` : ''}`,
     board.length ? `Банк ${fmt(state.pot)}, соперник поставил ${fmt(state.toCall)}, соперников ${state.opponents}, блефует: ${{ rare: 'редко', normal: 'обычно', often: 'часто' }[state.style]}` : '',
     a ? `Совет приложения: ${a.title} · шанс ${percentText(a.equity)} % — ${a.advice.reason}` : '',
     'Я думаю: ',
     `#data ${JSON.stringify({ occupied: state.occupied, hero: state.hero, button: state.button, bb: state.bb, stack: state.stack,
       hole: state.hole, board: state.board, preflop: state.preflop, limpers: state.limpers, raiseTo: state.raiseTo,
-      pot: state.pot, toCall: state.toCall, opponents: state.opponents, style: state.style, anteOn: state.anteOn })}`,
+      pot: state.pot, toCall: state.toCall, opponents: state.opponents, style: state.style, anteOn: state.anteOn, callers: liveCallers().length })}`,
   ].filter(Boolean).join('\n');
   // Главный путь с телефона — письмо себе: Claude сам найдёт его в почте по теме.
   // Адрес не вшиваем (код публичный) — айфон подставит свой адрес по первым буквам.
@@ -579,7 +598,7 @@ function renderTicket() {
         opener: state.raiser && state.raiser !== state.hero ? seatPosition(state.occupied, state.button, state.raiser) : null,
         heroOpened: state.preflop === '3bet' && state.raiser === state.hero,
         threeBettor: state.reraiser ? seatPosition(state.occupied, state.button, state.reraiser) : null });
-      const pe = preflopEquity({ hero, action: state.preflop, limpers: state.limpers, opener: raiserPos() });
+      const pe = preflopEquity({ hero, action: state.preflop, limpers: state.limpers, opener: raiserPos(), callers: liveCallers().length });
       equity = pe.equity;
       gaugeNote = pe.label;
       lines = [`<b>${handClass(hero[0], hero[1])}</b> · ${heroPos.name}`, advice.reason];
@@ -751,7 +770,7 @@ function startNewHand() {
   state.button = nextActive(state.occupied, state.button); // кнопка уходит к следующему игроку
   state.hole = [null, null];
   state.board = [null, null, null, null, null];
-  state.preflop = 'none'; state.limpers = 1; state.raiseTo = 0; state.raiser = 0; state.reraiser = 0;
+  state.preflop = 'none'; state.limpers = 1; state.raiseTo = 0; state.raiser = 0; state.reraiser = 0; state.callers = [];
   state.pot = 0; state.toCall = 0; state.opponents = 1;
   state.street = -1; state.preMove = null; state.streetLog = []; state.potFix = null;
   lastAdvice = null;
