@@ -1,5 +1,5 @@
 // Сравнение советов приложения с решениями TexasSolver на флопе.
-// Запуск: node compare.mjs result.json "Kh 7c 2d" [итераций приложения]
+// Запуск: node compare.mjs result.json "Kh 7c 2d" [итераций приложения] [открыл: BTN|CO|SB] [стек ББ]
 // Точки решения: A — ББ первым (чек/ставка), B — после чека ББ ходит баттон (ставка/чек),
 // C — баттон поставил, ББ отвечает, D — ББ поставил первым, баттон отвечает.
 import { readFileSync } from 'node:fs';
@@ -8,12 +8,17 @@ import { positionInfo } from '../../src/positions.js';
 import { postflopAdvice } from '../../src/postflop.js';
 import { seededRandom } from '../../src/equity.js';
 
-const [resultFile, boardText, itersArg] = process.argv.slice(2);
+const [resultFile, boardText, itersArg, opener = 'BTN', stackArg = '100'] = process.argv.slice(2);
 const tree = JSON.parse(readFileSync(resultFile, 'utf8'));
 const board = boardText.split(/\s+/).map(cardFromString);
 const iterations = Number(itersArg || 2500);
-const BB_POS = positionInfo(9, 2), BTN_POS = positionInfo(9, 0);
-const POT = 55, STACK = 975; // в десятых ББ
+const BB_POS = positionInfo(9, 2);
+const OPEN_POS = positionInfo(9, { BTN: 0, CO: 8, SB: 1 }[opener]);
+const POT = opener === 'SB' ? 50 : 55, STACK = Number(stackArg) * 10 - 25; // в десятых ББ
+const openerIP = opener !== 'SB';
+// Кто ходит первым после флопа (без позиции) и кто в позиции.
+const OOP = openerIP ? 'BB' : 'OPEN', IP = openerIP ? 'OPEN' : 'BB';
+const ctx = (who) => (who === 'BB' ? { action: 'raise', hero: BB_POS, raiser: OPEN_POS } : { action: 'none', hero: OPEN_POS });
 
 // Группы действий: fold / check / call / bet / raise.
 const group = (a) => (a.startsWith('FOLD') ? 'fold' : a.startsWith('CHECK') ? 'check' : a.startsWith('CALL') ? 'call'
@@ -39,14 +44,14 @@ function appGroup(advice, facingBet, bet) {
 
 const points = [];
 const root = tree; // ходит ББ (без позиции)
-points.push({ name: 'A: ББ ходит первым', node: root, hero: 'BB', bet: 0 });
+points.push({ name: 'A: первым ходит игрок без позиции', node: root, hero: OOP, bet: 0 });
 const afterCheck = root.childrens?.CHECK;
-if (afterCheck) points.push({ name: 'B: после чека ББ ходит баттон', node: afterCheck, hero: 'BTN', bet: 0 });
+if (afterCheck) points.push({ name: 'B: после чека ходит игрок в позиции', node: afterCheck, hero: IP, bet: 0 });
 for (const [act, child] of Object.entries(afterCheck?.childrens || {})) {
-  if (group(act) === 'bet' && child.strategy) points.push({ name: `C: баттон ставит ${amountOf(act)}, ББ отвечает`, node: child, hero: 'BB', bet: amountOf(act) });
+  if (group(act) === 'bet' && child.strategy) points.push({ name: `C: в позиции ставит ${amountOf(act)}, отвечает без позиции`, node: child, hero: OOP, bet: amountOf(act) });
 }
 for (const [act, child] of Object.entries(root.childrens || {})) {
-  if (group(act) === 'bet' && child.strategy) points.push({ name: `D: ББ ставит ${amountOf(act)}, баттон отвечает`, node: child, hero: 'BTN', bet: amountOf(act) });
+  if (group(act) === 'bet' && child.strategy) points.push({ name: `D: без позиции ставит ${amountOf(act)}, отвечает в позиции`, node: child, hero: IP, bet: amountOf(act) });
 }
 
 const random = seededRandom(11);
@@ -57,9 +62,7 @@ for (const p of points) {
   let n = 0, top = 0, ok = 0, hard = 0;
   for (const [hand, mix] of Object.entries(mixes)) {
     const hero = [cardFromString(hand.slice(0, 2)), cardFromString(hand.slice(2, 4))];
-    const preflop = p.hero === 'BB'
-      ? { action: 'raise', hero: BB_POS, raiser: BTN_POS }
-      : { action: 'none', hero: BTN_POS };
+    const preflop = ctx(p.hero);
     const advice = postflopAdvice({ hero, board, opponents: 1, pot: POT, toCall: p.bet, preflopAction: preflop.action,
       stack: STACK, preflop, iterations, random, compareStyles: false });
     const g = appGroup(advice, p.bet > 0, p.bet);
