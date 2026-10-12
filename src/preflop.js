@@ -10,7 +10,7 @@ import { huCall } from './huCall.js';
 import { NASH_RING } from './nashRing.js';
 import { allClasses } from './hands.js';
 
-// Полный стол, до 15 ББ (src/nashRing.js): ва-банк по Нэшу и «средний» колл против ва-банка.
+// Полный стол, до 25 ББ (src/nashRing.js): ва-банк и колл против ва-банка по Нэшу.
 const CLASSES = allClasses();
 const ringCache = new Map();
 function ringSet(ante, behind, stackBB, which) {
@@ -83,6 +83,9 @@ const SPECULATIVE_IMPLIED = 30;
 // Против повторного повышения (3-бета).
 const FOURBET = 'KK+, AKs';
 const CALL_3BET = 'QQ, JJ, AKo, AQs';
+
+// Сильные руки, которые первым в раздачу не сбрасывают ни при каком стеке (проверка — scripts/audit.mjs).
+const PREMIUM = new Set(['AA', 'KK', 'QQ', 'JJ', 'TT', 'AKs', 'AKo', 'AQs', 'AQo', 'AJs', 'KQs']);
 
 const ranges = new Map();
 const inRange = (cls, text) => {
@@ -170,6 +173,11 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
       if (action === 'none') {
         const push = position.behind === 1 && !(ante > 0) ? nashHU(stackBB).push : ringSet(ante > 0, position.behind, stackBB, 0);
         const where = position.behind === 1 ? 'с малого блайнда против большого' : `с этого места (после тебя ${position.behind} игроков)`;
+        // Сильные руки при 10–15 ББ первым не пасуем: чистый Нэш с ранних мест режет их на самой границе, а PokerSkill
+        // (15 ББ) и Preflop Wizard (20 ББ) с ними идут ва-банк (сверка 2026-10-12, scripts/audit.mjs).
+        if (!push.has(cls) && stackBB >= 10 && PREMIUM.has(cls)) {
+          return { ...result('allin', stack, `Стек ${ru(stackBB)} ББ: ${cls} — сильная рука, ва-банк. По чистой таблице Нэша с этого места она на самой границе, но таблицы PokerSkill и Preflop Wizard с ней идут ва-банк.`), close: true };
+        }
         return push.has(cls)
           ? result('allin', stack, `Стек ${ru(stackBB)} ББ, до тебя все сбросили: по таблице Нэша${ante > 0 ? ' с анте' : ''} ${where} ${cls} — ва-банк.`)
           : result('fold', 0, `Стек ${ru(stackBB)} ББ: по таблице Нэша${ante > 0 ? ' с анте' : ''} ${where} ${cls} слабовата для ва-банка — пас.`);
@@ -184,12 +192,12 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
       }
       return result(isBB ? 'check' : 'fold', 0, `Стек ${ru(stackBB)} ББ — тут играют «ва-банк или пас», а ${cls} для ва-банка слабовата.`);
     }
-    // Против ва-банка — знаем, кто пошёл: колл по «средней» таблице для этой пары мест.
+    // Против ва-банка — знаем, кто пошёл: колл по таблице Нэша для этой пары мест.
     if (action === 'raise' && opener && raiseTo >= stack && opener.behind > position.behind) {
       const j = opener.behind - 1 - position.behind;
       const calls = ringSet(ante > 0, opener.behind, stackBB, 1 + j);
       return calls.has(cls)
-        ? result('allin', stack, `Стек ${ru(stackBB)} ББ: против ва-банка с этого места ${cls} выгодно уравнять — шанс выше цены колла, даже если он идёт ва-банк уже, чем по Нэшу.`)
+        ? result('allin', stack, `Стек ${ru(stackBB)} ББ: против ва-банка с этого места по таблице Нэша${ante > 0 ? ' с анте' : ''} ${cls} уравнивают — шанс выше цены колла.`)
         : result('fold', 0, `Стек ${ru(stackBB)} ББ: против ва-банка ${cls} слабовата — шанс ниже цены колла, пас.`);
     }
     const share = (action === '3bet' ? 0.04 : 0.07) + (stackBB <= 10 ? 0.04 : 0);
