@@ -52,13 +52,32 @@ td { padding: 8px; text-align: right; border-top: 1px solid var(--panel-line); w
 .ai { display: grid; grid-template-columns: 1fr 1fr 1fr; text-align: center; padding: 14px 8px; }
 .ai .big { font: 400 26px/1.1 Prata; }
 .ai small { color: var(--muted); font-size: 11.5px; }
+.tabs span:last-child { flex: 0 0 48px; }
+.cal { background: var(--panel); border: 1px solid var(--panel-line); border-radius: 14px; padding: 12px; margin-bottom: 14px; }
+.cal-head { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 8px; } .cal-head span { color: var(--gold); }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; font-size: 13px; }
+.cal-grid i { font-style: normal; color: var(--muted); font-size: 11px; }
+.cal-grid span { padding: 6px 0; border-radius: 8px; color: var(--muted); }
+.cal-grid .t { background: #3a3220; color: var(--gold); font-weight: 700; }
+.cal-grid .on { background: var(--gold); color: var(--ink); }
+.cal-note { color: var(--muted); font-size: 11.5px; margin-top: 8px; }
 .note { color: var(--muted); font-size: 12px; margin-top: 18px; text-align: center; }
 </style>
 </head>
 <body>
   <div class="top"><h1>Моя статистика</h1><span class="pro">PRO</span></div>
   <p class="sub">Пример: турнир 12 октября · 62 раздачи · анте</p>
-  <div class="tabs"><span class="on">Этот турнир</span><span>Неделя</span><span>Всё время</span></div>
+  <div class="tabs"><span class="on">Турнир</span><span>Месяц</span><span>Всё время</span><span>📅</span></div>
+  <div class="cal">
+    <div class="cal-head"><b>Октябрь 2026</b><span>‹ ›</span></div>
+    <div class="cal-grid">
+      <i>Пн</i><i>Вт</i><i>Ср</i><i>Чт</i><i>Пт</i><i>Сб</i><i>Вс</i>
+      <span></span><span></span><span>1</span><span>2</span><span class="t">3</span><span class="t">4</span><span>5</span>
+      <span>6</span><span>7</span><span>8</span><span>9</span><span class="t">10</span><span class="t">11</span><span class="t on">12</span>
+      <span>13</span><span>14</span><span>15</span><span>16</span><span>17</span><span>18</span><span>19</span>
+    </div>
+    <div class="cal-note">Золотые дни — когда играл турнир. Нажми на день — откроется его статистика.</div>
+  </div>
 
   <div class="card">
     <div><div class="n">62</div><small>раздачи</small></div>
@@ -90,8 +109,8 @@ td { padding: 8px; text-align: right; border-top: 1px solid var(--panel-line); w
   <div class="hands">
     <div class="panel h"><div class="cards"><div class="c r">Q<i>♥</i></div><div class="c">Q<i>♣</i></div></div>
       <div class="nm">QQ<span>«Дамы»</span></div><div class="res"><b class="minus">−12 ББ</b>2 раза</div></div>
-    <div class="panel h"><div class="cards"><div class="c">K<i>♠</i></div><div class="c r">T<i>♦</i></div></div>
-      <div class="nm">KT<span>«Месси»</span></div><div class="res"><b class="minus">−5 ББ</b>3 раза</div></div>
+    <div class="panel h"><div class="cards"><div class="c">K<i>♠</i></div><div class="c r">10<i>♦</i></div></div>
+      <div class="nm">K10<span>«Месси»</span></div><div class="res"><b class="minus">−5 ББ</b>3 раза</div></div>
   </div>
 
   <h2><span class="num">3.</span> Стек за турнир</h2>
@@ -108,18 +127,18 @@ td { padding: 8px; text-align: right; border-top: 1px solid var(--panel-line); w
         points="52.0,80 67.0,78 82.1,74 97.1,76 112.2,62 127.2,58 142.3,64 157.3,66 172.4,90 187.4,112 202.5,128 217.5,124 232.6,96 247.6,92 262.6,70 277.7,60 292.7,52 307.8,48 322.8,44 336.0,44"/>
       <circle cx="202.5" cy="128" r="4.5" fill="#ff8a8f" stroke="#18241d" stroke-width="2"/>
       <circle cx="232.6" cy="96" r="4.5" fill="#7fd6a2" stroke="#18241d" stroke-width="2"/>
-      <text x="150" y="146" fill="#ff8a8f" font-family="Manrope" font-size="10.5" font-weight="700">QQ против AK: −12 ББ</text>
-      <text x="236" y="112" fill="#7fd6a2" font-family="Manrope" font-size="10.5" font-weight="700">AK ва-банк: +16 ББ</text>
+      <text x="150" y="146" fill="#ff8a8f" font-family="Manrope" font-size="10.5" font-weight="700">QQ, проиграл: −12 ББ</text>
+      <text x="236" y="112" fill="#7fd6a2" font-family="Manrope" font-size="10.5" font-weight="700">AK, выиграл: +16 ББ</text>
     </svg>
     <div class="cap"><span>раздача 1</span><span>раздача 62</span></div>
   </div>
 
-  <h2><span class="num">4.</span> Ва-банки</h2>
-  <p class="hint">Когда шёл ва-банк сам или уравнивал чужой</p>
+  <h2><span class="num">4.</span> Когда советовал ва-банк</h2>
+  <p class="hint">Сколько раз приложение советовало ва-банк, сколько раз ты сыграл и чем кончилось</p>
   <div class="panel ai">
-    <div><div class="big">7</div><small>ва-банков</small></div>
-    <div><div class="big">4</div><small>выиграл</small></div>
-    <div><div class="big plus">+11 ББ</div><small>итог</small></div>
+    <div><div class="big">9</div><small>советовал</small></div>
+    <div><div class="big">7</div><small>ты сыграл</small></div>
+    <div><div class="big plus">+11 ББ</div><small>итог этих раздач</small></div>
   </div>
 
   <h2><span class="num">5.</span> По глубине стека</h2>
