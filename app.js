@@ -5,11 +5,11 @@ import { preflopAdvice, preflopEquity } from './src/preflop.js';
 import { postflopAdvice, whoBeatsYou, percentText } from './src/postflop.js';
 import { handClass } from './src/hands.js';
 import { preflopPot, currentPot, streetMoney } from './src/pot.js';
-import { proStatus, checkCode, PRO_PRICE, SHORT_STACK_PRO_BB, TRIAL_DAYS } from './src/pro.js';
+import { proStatus, checkCode, PRO_PRICE, SHORT_STACK_PRO_BB, TRIAL_DAYS, PRO_ENFORCED } from './src/pro.js';
 import { GEOMETRY, DEALER_XY, SEAT_XY, SEAT_COUNT, activeSeats, seatPosition, nextActive } from './src/table.js';
 
 // Номер версии — поднимать при каждом обновлении вместе с CACHE в sw.js.
-const APP_VERSION = 31;
+const APP_VERSION = 32;
 const $ = (id) => document.getElementById(id);
 const RANK_LABEL = { 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
 const rankLabel = (r) => RANK_LABEL[r] || String(r);
@@ -44,7 +44,8 @@ const state = {
 // ---------- Pro ----------
 // Пробная неделя считается с первого запуска; купленный код запоминается. Всё — только в памяти телефона.
 const proStore = (() => { try { return JSON.parse(localStorage.getItem('poker-pro')) || {}; } catch { return {}; } })();
-const firstLaunch = !proStore.trialStart;
+// Неделя начинает считаться, только когда продажи включены (PRO_ENFORCED), — пока всё открыто, она не тратится.
+const firstLaunch = PRO_ENFORCED && !proStore.trialStart;
 if (firstLaunch) proStore.trialStart = Date.now();
 const saveProStore = () => { try { localStorage.setItem('poker-pro', JSON.stringify(proStore)); } catch { /* приватный режим */ } };
 saveProStore();
@@ -819,7 +820,8 @@ function startNewHand() {
 // Строка статуса Pro в настройках.
 function proRow() {
   const st = pro();
-  const text = st.kind === 'bought' ? 'Pro навсегда — спасибо!'
+  const text = st.kind === 'open' ? 'Pro: сейчас всё открыто бесплатно'
+    : st.kind === 'bought' ? 'Pro навсегда — спасибо!'
     : st.kind === 'trial' ? `Pro бесплатно: осталось ${st.daysLeft} ${st.daysLeft === 1 ? 'день' : st.daysLeft < 5 ? 'дня' : 'дней'}`
     : 'Бесплатная версия';
   return `<button class="pro-row ${st.kind}" data-act="pro"><span class="pro-badge">PRO</span>${text}<b>›</b></button>`;
@@ -836,10 +838,11 @@ function openPro() {
       <li class="soon"><b>Тренажёр</b> без ограничений — скоро.</li>
       <li class="soon"><b>Статистика</b> турниров — скоро.</li>
     </ul>
-    <p class="pro-status">${st.kind === 'bought' ? 'У тебя Pro навсегда.'
+    <p class="pro-status">${st.kind === 'open' ? 'Сейчас всё открыто бесплатно для всех — идёт проверка приложения.'
+      : st.kind === 'bought' ? 'У тебя Pro навсегда.'
       : st.kind === 'trial' ? `Сейчас всё открыто: пробная неделя, осталось ${st.daysLeft} дн.`
       : `Пробная неделя (${TRIAL_DAYS} дней) закончилась.`}</p>
-    ${st.kind === 'bought' ? '' : `<div class="pro-buy">Pro навсегда — <b>${PRO_PRICE} ₽</b><small>Оплата скоро появится. Есть код — введи ниже.</small></div>
+    ${st.kind === 'bought' ? '' : `<div class="pro-buy">Pro навсегда — <b>${PRO_PRICE} ₽</b><small>Оплата скоро появится. Есть код — введи ниже. Сохрани код: на новом телефоне или в другом браузере его можно ввести снова.</small></div>
     <div class="pro-code"><input id="pro-code" placeholder="PRO-XXXX-XXXX" autocapitalize="characters" autocomplete="off">
       <button data-act="code">Активировать</button></div><p class="note" id="pro-msg"></p>`}`);
   sheet.querySelector('[data-act="close"]').onclick = closeSheet;
