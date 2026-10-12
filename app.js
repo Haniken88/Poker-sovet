@@ -8,7 +8,7 @@ import { preflopPot, currentPot, streetMoney } from './src/pot.js';
 import { GEOMETRY, DEALER_XY, SEAT_XY, SEAT_COUNT, activeSeats, seatPosition, nextActive } from './src/table.js';
 
 // Номер версии — поднимать при каждом обновлении вместе с CACHE в sw.js.
-const APP_VERSION = 24;
+const APP_VERSION = 25;
 const $ = (id) => document.getElementById(id);
 const RANK_LABEL = { 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
 const rankLabel = (r) => RANK_LABEL[r] || String(r);
@@ -28,6 +28,7 @@ const state = {
   stack: saved.stack || 0, // 0 — не указан
   style: saved.style || 'normal', // как блефует поставивший соперник
   anteOn: Boolean(saved.anteOn), // анте платит большой блайнд, размером с ББ (турнир владельца)
+  levels: Array.isArray(saved.levels) ? saved.levels : [], // уровни турнира: большие блайнды по порядку
   hidden: false, // карты спрятаны от соседей (смахнуть влево / вправо)
   hole: [null, null],
   board: [null, null, null, null, null],
@@ -42,7 +43,7 @@ const anteNow = () => (state.anteOn ? state.bb : 0);
 const persist = () => {
   try {
     localStorage.setItem('poker-table', JSON.stringify(
-      { occupied: state.occupied, hero: state.hero, button: state.button, bb: state.bb, stack: state.stack, style: state.style, anteOn: state.anteOn }));
+      { occupied: state.occupied, hero: state.hero, button: state.button, bb: state.bb, stack: state.stack, style: state.style, anteOn: state.anteOn, levels: state.levels }));
   } catch { /* приватный режим — просто не запоминаем */ }
 };
 
@@ -339,6 +340,15 @@ function stepper(key, name, step, min = 0, max = 100000) {
     <span class="btns"><button type="button" data-key="${key}" data-step="${-step}" data-min="${min}" data-max="${max}" aria-label="Меньше">−</button><button type="button" data-key="${key}" data-step="${step}" data-min="${min}" data-max="${max}" aria-label="Больше">+</button></span></label>`;
 }
 
+// Быстрые суммы под полем: [подпись, сумма]; нажатая подсвечивается.
+function quick(key, items) {
+  const list = items.filter(([, v]) => v > 0);
+  if (!list.length) return '';
+  return `<div class="quick">${list.map(([t, v]) => `<button type="button" data-quick="${key}" data-value="${v}" aria-pressed="${state[key] === v}">${t}</button>`).join('')}</div>`;
+}
+// Круглые суммы: до четверти блайнда.
+const roundBet = (n) => Math.max(state.bb / 4, Math.round(n / (state.bb / 4)) * (state.bb / 4));
+
 const PREFLOP_CHOICES = [
   ['none', 'Пас', 'Все до тебя <b>сбросили карты (пас)</b> — ты входишь первым (блайнды не в счёт).'],
   ['limp', 'Уравняли', 'Кто-то <b>просто уравнял</b> большой блайнд, не повышая (лимп).'],
@@ -384,7 +394,8 @@ function renderInputs() {
         <div class="explain">${huButton && state.preflop === 'none' ? 'Один на один ты ходишь <b>первым</b> — до тебя никто не ходил.'
           : huBB && state.preflop === 'none' ? 'Один на один соперник на баттоне ходит <b>раньше тебя</b> — отметь, что он сделал.' : current[2]}${raiserLine()}</div></div>
       ${state.preflop === 'limp' ? `<div class="steppers">${stepper('limpers', 'Сколько игроков уравняли', 1, 1, others)}</div>` : ''}
-      ${state.preflop === 'raise' || state.preflop === '3bet' ? `<div class="steppers">${stepper('raiseTo', 'Повысили до', state.bb, state.bb)}</div>` : ''}`;
+      ${state.preflop === 'raise' || state.preflop === '3bet' ? `<div><div class="steppers">${stepper('raiseTo', 'Повысили до', state.bb, state.bb)}</div>
+        ${quick('raiseTo', [...(state.preflop === 'raise' ? [['2 ББ', 2 * state.bb], ['2,5 ББ', 2.5 * state.bb], ['3 ББ', 3 * state.bb]] : []), ['Ва-банк', state.stack]])}</div>` : ''}`;
     for (const b of box.querySelectorAll('[data-pre]')) b.onclick = () => {
       if (state.preflop !== b.dataset.pre) { state.raiser = 0; state.reraiser = 0; }
       state.preflop = b.dataset.pre;
@@ -394,9 +405,9 @@ function renderInputs() {
     };
   } else {
     const styles = [['rare', 'Редко блефует'], ['normal', 'Обычно'], ['often', 'Часто блефует']];
-    box.innerHTML = `<div class="steppers">
-      ${stepper('toCall', 'Соперник поставил', state.bb)}
-      ${stepper('opponents', 'Соперников в игре', 1, 1, others)}</div>
+    box.innerHTML = `<div><div class="steppers">${stepper('toCall', 'Соперник поставил', state.bb)}</div>
+      ${quick('toCall', [['½ банка', roundBet(state.pot / 2)], ['⅔ банка', roundBet(state.pot * 2 / 3)], ['Банк', roundBet(state.pot)], ['Ва-банк', state.stack]])}</div>
+      <div class="steppers">${stepper('opponents', 'Соперников в игре', 1, 1, others)}</div>
       ${state.toCall ? `<div><div class="label">Как играет поставивший</div>
         <div class="segments">${styles.map(([k, t]) => `<button data-style="${k}" aria-pressed="${state.style === k}">${t}</button>`).join('')}</div>
         <div class="explain">Не знаешь — оставь «Обычно». Большой ставкой обычно ставят сильную руку.</div></div>` : ''}`;
@@ -408,6 +419,11 @@ function renderInputs() {
 }
 
 function bindSteppers(box) {
+  for (const b of box.querySelectorAll('[data-quick]')) b.onclick = () => {
+    const key = b.dataset.quick;
+    state[key] = Number(b.dataset.value);
+    render();
+  };
   for (const b of box.querySelectorAll('button[data-step]')) b.onclick = () => {
     const key = b.dataset.key;
     state[key] = Math.min(Number(b.dataset.max), Math.max(Number(b.dataset.min), state[key] + Number(b.dataset.step)));
@@ -450,6 +466,22 @@ function renderStakes() {
     : '<span class="warn">укажи ✎</span>'}`;
 }
 $('stakes').onclick = openSettings;
+
+// Уровни блайндов: следующий уровень одним касанием (анте = ББ подстраивается само).
+const nextLevel = () => state.levels.find((v) => v > state.bb);
+function renderLevel() {
+  const btn = $('level-up');
+  const next = nextLevel();
+  btn.hidden = !next;
+  if (next) btn.innerHTML = `▲<small>ББ ${fmt(next)}</small>`;
+}
+$('level-up').onclick = () => {
+  const next = nextLevel();
+  if (!next) return;
+  state.bb = next; persist(); render();
+};
+// «40 000, 50 000, 60 000» → [40000, 50000, 60000] (пробелы внутри чисел — тысячи).
+const parseLevels = (text) => [...new Set(text.split(/[,;\n]+/).map((t) => Number(t.replace(/[^\d]/g, ''))).filter((v) => v > 0))].sort((a, b) => a - b);
 
 // ---------- Совет ----------
 let adviceTimer = 0;
@@ -736,12 +768,16 @@ function openSettings() {
     </div>
     <div style="margin-top:14px"><div class="label">Анте (платит большой блайнд, размером с ББ)</div>
       <div class="segments">${[[false, 'Нет'], [true, 'Есть']].map(([v, t]) => `<button data-ante="${v}" aria-pressed="${state.anteOn === v}">${t}</button>`).join('')}</div></div>
+    <div style="margin-top:14px"><div class="label">Уровни турнира — большие блайнды через запятую</div>
+      <input class="levels-input" id="levels" inputmode="numeric" placeholder="40 000, 50 000, 60 000, 80 000" value="${state.levels.map(fmt).join(', ')}">
+      <p class="note">Вверху появится кнопка «▲» — следующий уровень одним касанием.</p></div>
     <p class="note">Суммы — в деньгах стола, не в штуках фишек. Игра 250/500: большой блайнд 500.
       Стек решает многое: при глубоких стеках выгодно дёшево уравнивать с маленькими парами и одномастными
       связками (попадёшь — выиграешь много), а с коротким (до 15 ББ) играют «ва-банк или пас».
       Если у соперника денег заметно меньше, чем у тебя, помни: больше них с него не выиграешь.</p>
     <p class="note">Версия приложения: <b>${APP_VERSION}</b></p>`);
   sheet.querySelector('[data-act="close"]').onclick = closeSheet;
+  sheet.querySelector('#levels').onchange = (e) => { state.levels = parseLevels(e.target.value); persist(); render(); };
   for (const b of sheet.querySelectorAll('[data-ante]')) b.onclick = () => {
     state.anteOn = b.dataset.ante === 'true'; persist(); openSettings(); render();
   };
@@ -751,10 +787,18 @@ $('settings-btn').onclick = openSettings;
 
 function render() {
   syncPot();
+  renderLevel();
   renderTable();
   renderHand();
   renderInputs();
   renderTicket();
+}
+
+// Карточка совета прилеплена к низу экрана: запас под страницей = её высота, чтобы она не закрывала поля и кнопки.
+if ('ResizeObserver' in window) {
+  new ResizeObserver(() => {
+    document.body.style.paddingBottom = `calc(${$('ticket').offsetHeight + 24}px + var(--safe-bottom))`;
+  }).observe($('ticket'));
 }
 
 buildTable();
