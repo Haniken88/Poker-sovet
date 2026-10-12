@@ -8,7 +8,7 @@ import { preflopPot, currentPot, streetMoney } from './src/pot.js';
 import { GEOMETRY, DEALER_XY, SEAT_XY, SEAT_COUNT, activeSeats, seatPosition, nextActive } from './src/table.js';
 
 // Номер версии — поднимать при каждом обновлении вместе с CACHE в sw.js.
-const APP_VERSION = 26;
+const APP_VERSION = 27;
 const $ = (id) => document.getElementById(id);
 const RANK_LABEL = { 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
 const rankLabel = (r) => RANK_LABEL[r] || String(r);
@@ -529,15 +529,15 @@ async function copyHand() {
       hole: state.hole, board: state.board, preflop: state.preflop, limpers: state.limpers, raiseTo: state.raiseTo,
       pot: state.pot, toCall: state.toCall, opponents: state.opponents, style: state.style, anteOn: state.anteOn, callers: liveCallers().length })}`,
   ].filter(Boolean).join('\n');
-  // Главный путь с телефона — письмо себе: Claude сам найдёт его в почте по теме.
-  // Адрес не вшиваем (код публичный) — айфон подставит свой адрес по первым буквам.
+  // Главный путь с телефона — письмо разработчику (владельцу): Claude сам найдёт его в почте по теме.
+  // Код публичный — адрес собираем из кусочков, чтобы роботы-сборщики не нашли его целиком (решение владельца 2026-10-12).
   openSheet(`<h2>Не согласен<button data-act="close">Закрыть</button></h2>
     <div class="menu">
-      <a class="mail-btn" href="mailto:?subject=${encodeURIComponent(MAIL_SUBJECT)}&body=${encodeURIComponent(text)}">
-        Отправить письмом себе <small>потом скажи Claude «проверь раздачи на почте»</small></a>
+      <a class="mail-btn" href="mailto:${devMail()}?subject=${encodeURIComponent(MAIL_SUBJECT)}&body=${encodeURIComponent(text)}">
+        Отправить разработчику <small>адрес уже вписан — останется нажать «Отправить»</small></a>
       <button data-act="copy">Скопировать текстом <small>вставить в чат вручную</small></button>
     </div>
-    <p class="note">В письме после «Я думаю:» допиши своё мнение. Получатель — ты сам: начни набирать свой адрес.</p>`);
+    <p class="note">В письме после «Я думаю:» допиши, как бы сыграл ты, — так разбор будет точнее.</p>`);
   sheet.querySelector('[data-act="close"]').onclick = closeSheet;
   sheet.querySelector('[data-act="copy"]').onclick = async () => {
     try {
@@ -554,6 +554,9 @@ async function copyHand() {
   };
 }
 const MAIL_SUBJECT = 'Покер — раздача для разбора';
+// Адрес разработчика — по кусочкам и задом наперёд, целиком в коде его нет.
+const devMail = () => [['moc', 'liamg'].map((p) => [...p].reverse().join('')).reverse().join('.'),
+  String.fromCharCode(104, 55, 56, 57, 48, 53, 48, 48)].reverse().join('@');
 function renderTicket() {
   const ticket = $('ticket');
   const heroPos = seatPosition(state.occupied, state.button, state.hero);
