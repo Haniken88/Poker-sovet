@@ -7,3 +7,4 @@ data-build/*.json
 data-build/disagree.txt
 data-build/nash/.eq-cache.json
 PLAN.private.md
+data-build/nash/ring.json
