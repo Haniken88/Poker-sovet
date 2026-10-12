@@ -4,7 +4,7 @@ const CACHE = 'poker-v31';
 const FILES = [
   './', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest',
   'src/cards.js', 'src/evaluator.js', 'src/equity.js', 'src/hands.js', 'src/handRanks.js',
-  'src/positions.js', 'src/preflop.js', 'src/postflop.js', 'src/table.js', 'src/ranges.js', 'src/preflopData.js', 'src/openTables.js', 'src/nicknames.js', 'src/nashHU.js', 'src/nashHUAnte.js', 'src/huCall.js', 'src/pot.js', 'src/nashRing.js',
+  'src/positions.js', 'src/preflop.js', 'src/postflop.js', 'src/table.js', 'src/ranges.js', 'src/preflopData.js', 'src/openTables.js', 'src/nicknames.js', 'src/nashHU.js', 'src/nashHUAnte.js', 'src/huCall.js', 'src/pot.js', 'src/nashRing.js', 'src/pro.js',
   'fonts/fonts.css', 'fonts/prata-latin.woff2', 'fonts/prata-cyrillic.woff2',
   'fonts/manrope-latin.woff2', 'fonts/manrope-cyrillic.woff2',
   'icons/icon-192.png', 'icons/apple-touch-icon.png',

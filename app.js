@@ -5,6 +5,7 @@ import { preflopAdvice, preflopEquity } from './src/preflop.js';
 import { postflopAdvice, whoBeatsYou, percentText } from './src/postflop.js';
 import { handClass } from './src/hands.js';
 import { preflopPot, currentPot, streetMoney } from './src/pot.js';
+import { proStatus, checkCode, PRO_PRICE, SHORT_STACK_PRO_BB, TRIAL_DAYS } from './src/pro.js';
 import { GEOMETRY, DEALER_XY, SEAT_XY, SEAT_COUNT, activeSeats, seatPosition, nextActive } from './src/table.js';
 
 // Номер версии — поднимать при каждом обновлении вместе с CACHE в sw.js.
@@ -40,7 +41,16 @@ const state = {
   // прошедшие улицы после флопа и ручная поправка банка.
   street: -1, preMove: null, streetLog: [], potFix: null,
 };
-const anteNow = () => (state.anteOn ? state.bb : 0);
+// ---------- Pro ----------
+// Пробная неделя считается с первого запуска; купленный код запоминается. Всё — только в памяти телефона.
+const proStore = (() => { try { return JSON.parse(localStorage.getItem('poker-pro')) || {}; } catch { return {}; } })();
+const firstLaunch = !proStore.trialStart;
+if (firstLaunch) proStore.trialStart = Date.now();
+const saveProStore = () => { try { localStorage.setItem('poker-pro', JSON.stringify(proStore)); } catch { /* приватный режим */ } };
+saveProStore();
+const pro = () => proStatus(proStore);
+const isPro = () => pro().pro;
+const anteNow = () => (state.anteOn && isPro() ? state.bb : 0);
 const persist = () => {
   try {
     localStorage.setItem('poker-table', JSON.stringify(
@@ -496,7 +506,7 @@ $('pot-chip').onclick = () => {
 // Блайнды и стек — строка вверху.
 function renderStakes() {
   const sb = fmt(state.bb / 2), bb = fmt(state.bb);
-  $('stakes').innerHTML = `Блайнды <b>${sb}/${bb}</b>${state.anteOn ? ` · анте <b>${bb}</b>` : ''} · Твой стек ${state.stack
+  $('stakes').innerHTML = `Блайнды <b>${sb}/${bb}</b>${anteNow() ? ` · анте <b>${bb}</b>` : ''} · Твой стек ${state.stack
     ? `<b>${fmt(state.stack)}</b> (${fmt(Math.round(state.stack / state.bb))} ББ)`
     : '<span class="warn">укажи ✎</span>'}`;
 }
@@ -506,7 +516,7 @@ $('stakes').onclick = openSettings;
 const nextLevel = () => state.levels.find((v) => v > state.bb);
 function renderLevel() {
   const btn = $('level-up');
-  const next = nextLevel();
+  const next = isPro() ? nextLevel() : null;
   btn.hidden = !next;
   if (next) btn.innerHTML = `▲<small>ББ ${fmt(next)}</small>`;
 }
@@ -595,6 +605,15 @@ function renderTicket() {
       ticket.innerHTML = `<div class="wait">До тебя никто не ходил<small>Один на один ты ходишь первым: выбери «Пас». Если ты повысил, а соперник ответил повышением, — «Повысили ×2».</small></div>`;
       return;
     }
+  }
+  // Короткий стек до флопа — в Pro (советы после флопа и при глубоком стеке бесплатные).
+  const stackBB = state.stack ? state.stack / state.bb : Infinity;
+  if (count === 0 && !isPro() && stackBB <= SHORT_STACK_PRO_BB && !(heroPos.key === 'BB' && state.preflop === 'none')) {
+    ticket.classList.remove('busy');
+    ticket.innerHTML = `<div class="wait">Стек ${fmt(stackBB)} ББ — короткий<small>Здесь играют «ва-банк или пас»: точный совет по таблицам Нэша — в Pro. Советы при глубоком стеке и после флопа — бесплатные.</small>
+      <button class="pro-cta" data-act="pro">Что даёт Pro</button></div>`;
+    ticket.querySelector('[data-act="pro"]').onclick = openPro;
+    return;
   }
   if (count === 1 || count === 2) {
     ticket.innerHTML = `<div class="wait">Добавь остальные карты флопа<small>Флоп — это 3 карты</small></div>`;
@@ -797,25 +816,66 @@ function startNewHand() {
   render();
 }
 
+// Строка статуса Pro в настройках.
+function proRow() {
+  const st = pro();
+  const text = st.kind === 'bought' ? 'Pro навсегда — спасибо!'
+    : st.kind === 'trial' ? `Pro бесплатно: осталось ${st.daysLeft} ${st.daysLeft === 1 ? 'день' : st.daysLeft < 5 ? 'дня' : 'дней'}`
+    : 'Бесплатная версия';
+  return `<button class="pro-row ${st.kind}" data-act="pro"><span class="pro-badge">PRO</span>${text}<b>›</b></button>`;
+}
+// Экран Pro: что даёт, статус, цена, код.
+function openPro() {
+  const st = pro();
+  openSheet(`
+    <h2>Покер · совет Pro<button data-act="close">Закрыть</button></h2>
+    <ul class="pro-list">
+      <li><b>Короткий стек</b> — когда ва-банк, а когда пас (до ${SHORT_STACK_PRO_BB} ББ), и с чем уравнивать чужой ва-банк. По таблицам Нэша, сверенным с HoldemResources.</li>
+      <li><b>Анте</b> — советы и таблицы с анте, как в турнирах.</li>
+      <li><b>Уровни турнира</b> — блайнды и анте меняются одной кнопкой «▲».</li>
+      <li class="soon"><b>Тренажёр</b> без ограничений — скоро.</li>
+      <li class="soon"><b>Статистика</b> турниров — скоро.</li>
+    </ul>
+    <p class="pro-status">${st.kind === 'bought' ? 'У тебя Pro навсегда.'
+      : st.kind === 'trial' ? `Сейчас всё открыто: пробная неделя, осталось ${st.daysLeft} дн.`
+      : `Пробная неделя (${TRIAL_DAYS} дней) закончилась.`}</p>
+    ${st.kind === 'bought' ? '' : `<div class="pro-buy">Pro навсегда — <b>${PRO_PRICE} ₽</b><small>Оплата скоро появится. Есть код — введи ниже.</small></div>
+    <div class="pro-code"><input id="pro-code" placeholder="PRO-XXXX-XXXX" autocapitalize="characters" autocomplete="off">
+      <button data-act="code">Активировать</button></div><p class="note" id="pro-msg"></p>`}`);
+  sheet.querySelector('[data-act="close"]').onclick = closeSheet;
+  const btn = sheet.querySelector('[data-act="code"]');
+  if (btn) btn.onclick = async () => {
+    const digest = async (t) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)))]
+      .map((x) => x.toString(16).padStart(2, '0')).join('');
+    const ok = await checkCode(sheet.querySelector('#pro-code').value, digest).catch(() => false);
+    if (ok) { proStore.unlocked = true; saveProStore(); render(); openPro(); }
+    else sheet.querySelector('#pro-msg').textContent = 'Код не подошёл — проверь буквы и цифры.';
+  };
+}
+
 function openSettings() {
   openSheet(`
     <h2>Блайнды и стек<button data-act="close">Готово</button></h2>
+    ${proRow()}
     <div class="steppers">
       ${stepper('bb', 'Большой блайнд', 1, 1)}
       ${stepper('stack', 'Твой стек', state.bb * 10)}
     </div>
-    <div style="margin-top:14px"><div class="label">Анте (платит большой блайнд, размером с ББ)</div>
+    ${isPro() ? `<div style="margin-top:14px"><div class="label">Анте (платит большой блайнд, размером с ББ)</div>
       <div class="segments">${[[false, 'Нет'], [true, 'Есть']].map(([v, t]) => `<button data-ante="${v}" aria-pressed="${state.anteOn === v}">${t}</button>`).join('')}</div></div>
     <div style="margin-top:14px"><div class="label">Уровни турнира — большие блайнды через запятую</div>
       <input class="levels-input" id="levels" inputmode="numeric" placeholder="40 000, 50 000, 60 000, 80 000" value="${state.levels.map(fmt).join(', ')}">
-      <p class="note">Вверху появится кнопка «▲» — следующий уровень одним касанием.</p></div>
+      <p class="note">Вверху появится кнопка «▲» — следующий уровень одним касанием.</p></div>`
+    : `<button class="locked-row" data-act="pro">Анте и уровни турнира <span>PRO</span></button>`}
     <p class="note">Суммы — в деньгах стола, не в штуках фишек. Игра 250/500: большой блайнд 500.
       Стек решает многое: при глубоких стеках выгодно дёшево уравнивать с маленькими парами и одномастными
       связками (попадёшь — выиграешь много), а с коротким (до 15 ББ) играют «ва-банк или пас».
       Если у соперника денег заметно меньше, чем у тебя, помни: больше них с него не выиграешь.</p>
     <p class="note">Версия приложения: <b>${APP_VERSION}</b></p>`);
   sheet.querySelector('[data-act="close"]').onclick = closeSheet;
-  sheet.querySelector('#levels').onchange = (e) => { state.levels = parseLevels(e.target.value); persist(); render(); };
+  const levels = sheet.querySelector('#levels');
+  if (levels) levels.onchange = (e) => { state.levels = parseLevels(e.target.value); persist(); render(); };
+  for (const b of sheet.querySelectorAll('[data-act="pro"]')) b.onclick = openPro;
   for (const b of sheet.querySelectorAll('[data-ante]')) b.onclick = () => {
     state.anteOn = b.dataset.ante === 'true'; persist(); openSettings(); render();
   };
@@ -837,6 +897,16 @@ if ('ResizeObserver' in window) {
   new ResizeObserver(() => {
     document.body.style.paddingBottom = `calc(${$('ticket').offsetHeight + 24}px + var(--safe-bottom))`;
   }).observe($('ticket'));
+}
+
+// Первый запуск: неделя Pro в подарок (не мешает нажатиям, сама пропадает).
+if (firstLaunch) {
+  const toast = document.createElement('button');
+  toast.className = 'toast';
+  toast.innerHTML = `<span class="pro-badge">PRO</span> ${TRIAL_DAYS} дней Pro бесплатно — всё открыто <b>›</b>`;
+  toast.onclick = () => { toast.remove(); openPro(); };
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 7000);
 }
 
 buildTable();
