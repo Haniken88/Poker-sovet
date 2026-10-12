@@ -8,7 +8,7 @@ import { preflopPot, currentPot, streetMoney } from './src/pot.js';
 import { GEOMETRY, DEALER_XY, SEAT_XY, SEAT_COUNT, activeSeats, seatPosition, nextActive } from './src/table.js';
 
 // Номер версии — поднимать при каждом обновлении вместе с CACHE в sw.js.
-const APP_VERSION = 30;
+const APP_VERSION = 31;
 const $ = (id) => document.getElementById(id);
 const RANK_LABEL = { 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
 const rankLabel = (r) => RANK_LABEL[r] || String(r);
@@ -421,6 +421,7 @@ function renderInputs() {
       if (state.preflop === 'raise' && state.raiseTo < 2 * state.bb) state.raiseTo = 3 * state.bb;
       if (state.preflop === '3bet' && state.raiseTo < 6 * state.bb) state.raiseTo = 9 * state.bb;
       render();
+      revealInputs();
     };
   } else {
     const styles = [['rare', 'Редко блефует'], ['normal', 'Обычно'], ['often', 'Часто блефует']];
@@ -435,6 +436,21 @@ function renderInputs() {
   bindSteppers(box);
   const repick = box.querySelector('#repick');
   if (repick) repick.onclick = () => { state.raiser = 0; state.reraiser = 0; state.callers = []; render(); };
+}
+
+// Под кнопками появилось новое поле («Повысили до», «Сколько уравняли») — плавно прокручиваем страницу так,
+// чтобы оно встало над карточкой совета (она прилеплена к низу экрана и иначе его закрывает).
+function revealInputs() {
+  const show = () => {
+    const last = $('inputs').lastElementChild;
+    if (!last) return;
+    const ticketTop = $('ticket').getBoundingClientRect().top;
+    const bottom = last.getBoundingClientRect().bottom;
+    if (bottom > ticketTop - 12) window.scrollBy({ top: bottom - ticketTop + 16, behavior: 'smooth' });
+  };
+  // Совет считается с небольшой задержкой и может поменять высоту карточки — сверяемся ещё раз.
+  requestAnimationFrame(show);
+  setTimeout(show, 250);
 }
 
 function bindSteppers(box) {
