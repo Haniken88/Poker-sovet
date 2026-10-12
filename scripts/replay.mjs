@@ -14,7 +14,7 @@ const stack = d.stack > 0 ? d.stack : Infinity;
 console.log('Карты:', hero.map(cardToString).join(' '), '| стол:', board.map(cardToString).join(' ') || '—',
   '| позиция:', pos.name, '| игроков:', activeSeats(d.occupied).length);
 if (!board.length) {
-  const a = preflopAdvice({ hero, position: pos, action: d.preflop, limpers: d.limpers, raiseTo: d.raiseTo, bigBlind: d.bb, stack });
+  const a = preflopAdvice({ hero, position: pos, action: d.preflop, limpers: d.limpers, raiseTo: d.raiseTo, bigBlind: d.bb, stack, ante: d.anteOn ? d.bb : 0 });
   const e = preflopEquity({ hero, action: d.preflop, limpers: d.limpers, iterations: 20000 });
   console.log(a.text, a.close ? '(спорно)' : '', '|', percentText(e.equity), '%', e.label, '|', a.reason);
 } else {

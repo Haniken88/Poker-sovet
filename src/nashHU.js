@@ -8,6 +8,7 @@
 // call — с чем большой блайнд уравнивает такой ва-банк (только против игры «по Нэшу»).
 import { RANKS } from './cards.js';
 import { parseRange } from './hands.js';
+import { NASH_HU_ANTE } from './nashHUAnte.js';
 
 export const NASH_HU_SOURCE = 'https://www.pokerstrategy.com/strategy/sit-and-go/1779/';
 
@@ -59,12 +60,16 @@ export function parseNashRange(text) {
 }
 
 const parsed = new Map();
-/** Стек в ББ → { push: Set, call: Set } по ближайшей строке таблицы (1–20). */
-export function nashHU(stackBB) {
+/** Стек в ББ → { push: Set, call: Set } по ближайшей строке таблицы (1–20); ante — с анте ББ (свой расчёт). */
+export function nashHU(stackBB, ante = false) {
   const key = Math.min(20, Math.max(1, Math.round(stackBB)));
-  if (!parsed.has(key)) {
-    const row = NASH_HU[key];
-    parsed.set(key, { push: parseNashRange(row.push), call: parseNashRange(row.call), row, key });
+  const id = (ante ? 'a' : '') + key;
+  if (!parsed.has(id)) {
+    const row = ante ? NASH_HU_ANTE[key] : NASH_HU[key];
+    const sets = ante
+      ? { push: new Set(row.push.split(' ').filter(Boolean)), call: new Set(row.call.split(' ').filter(Boolean)) }
+      : { push: parseNashRange(row.push), call: parseNashRange(row.call) };
+    parsed.set(id, { ...sets, row, key });
   }
-  return parsed.get(key);
+  return parsed.get(id);
 }

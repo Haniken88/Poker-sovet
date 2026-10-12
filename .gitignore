@@ -5,3 +5,4 @@ node_modules/
 data-build/src-data/
 data-build/*.json
 data-build/disagree.txt
+data-build/nash/.eq-cache.json

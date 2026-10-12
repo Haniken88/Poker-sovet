@@ -4,10 +4,11 @@ import { nicknameFor } from './src/nicknames.js';
 import { preflopAdvice, preflopEquity } from './src/preflop.js';
 import { postflopAdvice, whoBeatsYou, percentText } from './src/postflop.js';
 import { handClass } from './src/hands.js';
+import { preflopPot, currentPot, streetMoney } from './src/pot.js';
 import { GEOMETRY, DEALER_XY, SEAT_XY, SEAT_COUNT, activeSeats, seatPosition, nextActive } from './src/table.js';
 
 // Номер версии — поднимать при каждом обновлении вместе с CACHE в sw.js.
-const APP_VERSION = 23;
+const APP_VERSION = 24;
 const $ = (id) => document.getElementById(id);
 const RANK_LABEL = { 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
 const rankLabel = (r) => RANK_LABEL[r] || String(r);
@@ -26,17 +27,22 @@ const state = {
   bb: saved.bb || 2,
   stack: saved.stack || 0, // 0 — не указан
   style: saved.style || 'normal', // как блефует поставивший соперник
+  anteOn: Boolean(saved.anteOn), // анте платит большой блайнд, размером с ББ (турнир владельца)
   hidden: false, // карты спрятаны от соседей (смахнуть влево / вправо)
   hole: [null, null],
   board: [null, null, null, null, null],
   preflop: 'none', limpers: 1, raiseTo: 0,
   raiser: 0, reraiser: 0, // места повысивших (0 — не отмечено)
   pot: 0, toCall: 0, opponents: 1,
+  // Банк считается сам (src/pot.js): улица (-1 префлоп, 0 флоп, 1 тёрн, 2 ривер), что сделал ты префлоп,
+  // прошедшие улицы после флопа и ручная поправка банка.
+  street: -1, preMove: null, streetLog: [], potFix: null,
 };
+const anteNow = () => (state.anteOn ? state.bb : 0);
 const persist = () => {
   try {
     localStorage.setItem('poker-table', JSON.stringify(
-      { occupied: state.occupied, hero: state.hero, button: state.button, bb: state.bb, stack: state.stack, style: state.style }));
+      { occupied: state.occupied, hero: state.hero, button: state.button, bb: state.bb, stack: state.stack, style: state.style, anteOn: state.anteOn }));
   } catch { /* приватный режим — просто не запоминаем */ }
 };
 
@@ -257,13 +263,68 @@ function openPicker(kind, index) {
 }
 
 function onCardsChanged() {
-  // На флопе по умолчанию: банк и соперники с префлопа.
-  if (boardCount() >= 3 && !state.pot) {
-    state.pot = state.preflop === 'none' || state.preflop === 'limp'
-      ? state.bb * (1.5 + (state.preflop === 'limp' ? state.limpers : 0))
-      : state.raiseTo * 2 + state.bb / 2;
-  }
+  syncStreets();
   render();
+}
+
+// ---------- Банк сам ----------
+const streetOf = (count) => (count >= 5 ? 2 : count >= 4 ? 1 : count >= 3 ? 0 : -1);
+// Что посоветовало приложение на этой улице (считаем, что ты так и сыграл; банк можно поправить).
+const heroMoveFor = (street) => (lastAdvice && lastAdvice.street === street
+  ? { action: lastAdvice.advice.action, amount: lastAdvice.advice.amount } : null);
+// Сколько соперников на флопе по умолчанию: при лимпах — лимперы (и ББ, если это не ты), иначе один.
+function flopOpponents() {
+  if (state.preflop !== 'limp') return 1;
+  const pos = seatPosition(state.occupied, state.button, state.hero);
+  return Math.max(1, Math.min(activeCount() - 1, state.limpers + (pos?.key === 'BB' ? 0 : 1)));
+}
+// Карта стола добавлена или убрана: запоминаем прошедшую улицу или возвращаемся назад.
+function syncStreets() {
+  const now = streetOf(boardCount());
+  while (state.street < now) {
+    if (state.street === -1) {
+      state.preMove = heroMoveFor(-1);
+      state.opponents = flopOpponents();
+    } else {
+      state.streetLog.push({ toCall: state.toCall, heroMove: heroMoveFor(state.street), opponents: state.opponents });
+      state.toCall = 0;
+    }
+    state.street++;
+  }
+  while (state.street > now) {
+    if (state.street === 0) state.preMove = null;
+    else {
+      const back = state.streetLog.pop();
+      if (back) { state.toCall = back.toCall; state.opponents = back.opponents; }
+    }
+    if (state.potFix && state.potFix.street >= state.street) state.potFix = null;
+    state.street--;
+  }
+}
+function flopPotNow() {
+  const pos = seatPosition(state.occupied, state.button, state.hero);
+  const flopOpp = state.streetLog.length ? state.streetLog[0].opponents : state.opponents;
+  return preflopPot({ bb: state.bb, ante: anteNow(), action: state.preflop, raiseTo: state.raiseTo, heroMove: state.preMove,
+    players: flopOpp + 1, heroKey: pos?.key, headsUp: pos?.players === 2 });
+}
+// Из чего сложился банк — чтобы было видно, что приложение предположило.
+function potLines() {
+  if (state.street < 0) return '';
+  const names = ['Флоп', 'Тёрн', 'Ривер'];
+  const pre = PREFLOP_CHOICES.find(([k]) => k === state.preflop)[1].toLowerCase();
+  const flopOpp = state.streetLog.length ? state.streetLog[0].opponents : state.opponents;
+  const lines = [`До флопа (${pre}${state.anteOn ? ', анте' : ''}), игроков на флопе ${flopOpp + 1}: <b>${fmt(flopPotNow())}</b>`];
+  state.streetLog.forEach((st, i) => {
+    const stayed = i + 1 < state.streetLog.length ? state.streetLog[i + 1].opponents : state.opponents;
+    const money = streetMoney({ ...st, stayed });
+    const who = st.toCall > 0 ? `ставка соперника ${fmt(st.toCall)}` : money ? `твоя ставка ${fmt(money / (stayed + 1))} (по совету)` : 'без ставок';
+    lines.push(`${names[i]}: ${who}${money ? ` × ${stayed + 1} = <b>+${fmt(money)}</b>` : ''}`);
+  });
+  return `<p class="note">${lines.join('<br>')}</p>`;
+}
+function syncPot() {
+  state.pot = state.street < 0 ? 0
+    : currentPot({ flopPot: flopPotNow(), streets: state.streetLog, opponentsNow: state.opponents, fix: state.potFix });
 }
 
 // ---------- Ввод ставок ----------
@@ -350,11 +411,17 @@ function bindSteppers(box) {
   for (const b of box.querySelectorAll('button[data-step]')) b.onclick = () => {
     const key = b.dataset.key;
     state[key] = Math.min(Number(b.dataset.max), Math.max(Number(b.dataset.min), state[key] + Number(b.dataset.step)));
+    if (key === 'pot') state.potFix = { street: state.street, value: state.pot };
     if (box === sheet) { box.querySelector(`input[data-key="${key}"]`).value = fmt(state[key]); persist(); }
     render();
   };
   for (const input of box.querySelectorAll('input[data-key]')) {
-    input.onchange = () => { state[input.dataset.key] = parseNum(input.value); if (box === sheet) persist(); render(); };
+    input.onchange = () => {
+      state[input.dataset.key] = parseNum(input.value);
+      if (input.dataset.key === 'pot') state.potFix = { street: state.street, value: state.pot };
+      if (box === sheet) persist();
+      render();
+    };
     input.onfocus = () => input.select();
   }
 }
@@ -364,15 +431,21 @@ $('pot-chip').onclick = () => {
   openSheet(`
     <h2>Банк<button data-act="close">Готово</button></h2>
     <div class="steppers">${stepper('pot', 'Деньги в центре стола', state.bb)}</div>
-    <p class="note">Только то, что уже в центре. Ставку соперника на этой улице вводи отдельно — «Соперник поставил».</p>`);
+    ${potLines()}
+    <p class="note">${state.potFix
+      ? 'Банк поправлен вручную — дальше приложение прибавляет ставки к твоей сумме.'
+      : 'Банк считается сам: блайнды, анте и все, кто уравнял, а на каждой улице — ставка × оставшихся игроков. Если в жизни было иначе (кто-то повысил или сбросил посреди улицы) — поправь сумму.'}
+      Ставку соперника на этой улице вводи отдельно — «Соперник поставил».</p>
+    ${state.potFix ? '<button class="remove" data-act="auto">Считать банк автоматически</button>' : ''}`);
   sheet.querySelector('[data-act="close"]').onclick = closeSheet;
+  sheet.querySelector('[data-act="auto"]')?.addEventListener('click', () => { state.potFix = null; closeSheet(); render(); });
   bindSteppers(sheet);
 };
 
 // Блайнды и стек — строка вверху.
 function renderStakes() {
   const sb = fmt(state.bb / 2), bb = fmt(state.bb);
-  $('stakes').innerHTML = `Блайнды <b>${sb}/${bb}</b> · Твой стек ${state.stack
+  $('stakes').innerHTML = `Блайнды <b>${sb}/${bb}</b>${state.anteOn ? ` · анте <b>${bb}</b>` : ''} · Твой стек ${state.stack
     ? `<b>${fmt(state.stack)}</b> (${fmt(Math.round(state.stack / state.bb))} ББ)`
     : '<span class="warn">укажи ✎</span>'}`;
 }
@@ -394,7 +467,7 @@ async function copyHand() {
   const text = [
     'Раздача для разбора (Покер · совет)',
     `Стол: ${activeCount()} игроков, кнопка у места ${state.button}, я на месте ${state.hero} (${pos ? pos.name : '?'})`,
-    `Блайнды ${fmt(state.bb / 2)}/${fmt(state.bb)}, мой стек ${state.stack ? fmt(state.stack) : 'не указан'}`,
+    `Блайнды ${fmt(state.bb / 2)}/${fmt(state.bb)}${state.anteOn ? `, анте ${fmt(state.bb)}` : ''}, мой стек ${state.stack ? fmt(state.stack) : 'не указан'}`,
     `Мои карты: ${state.hole.map(cardText).join(' ')}`,
     board.length ? `На столе: ${board.map(cardText).join(' ')}` : 'На столе: ничего (префлоп)',
     pos && pos.players === 2 && pos.key === 'BTN' && state.preflop === 'none' ? 'До меня префлоп: никто (один на один я хожу первым)' : `До меня префлоп: ${pre}${state.preflop === 'limp' ? ` (${state.limpers})` : ''}${state.raiseTo && /raise|3bet/.test(state.preflop) ? ` до ${fmt(state.raiseTo)}` : ''}`,
@@ -403,7 +476,7 @@ async function copyHand() {
     'Я думаю: ',
     `#data ${JSON.stringify({ occupied: state.occupied, hero: state.hero, button: state.button, bb: state.bb, stack: state.stack,
       hole: state.hole, board: state.board, preflop: state.preflop, limpers: state.limpers, raiseTo: state.raiseTo,
-      pot: state.pot, toCall: state.toCall, opponents: state.opponents, style: state.style })}`,
+      pot: state.pot, toCall: state.toCall, opponents: state.opponents, style: state.style, anteOn: state.anteOn })}`,
   ].filter(Boolean).join('\n');
   // Главный путь с телефона — письмо себе: Claude сам найдёт его в почте по теме.
   // Адрес не вшиваем (код публичный) — айфон подставит свой адрес по первым буквам.
@@ -469,7 +542,7 @@ function renderTicket() {
     const hero = state.hole;
     let advice, equity, lines, gaugeNote = 'шанс выиграть';
     if (count === 0) {
-      advice = preflopAdvice({ hero, position: heroPos, action: state.preflop,
+      advice = preflopAdvice({ hero, position: heroPos, action: state.preflop, ante: anteNow(),
         limpers: state.limpers, raiseTo: state.raiseTo, bigBlind: state.bb, stack: stackOrInf(),
         opener: state.raiser && state.raiser !== state.hero ? seatPosition(state.occupied, state.button, state.raiser) : null,
         heroOpened: state.preflop === '3bet' && state.raiser === state.hero,
@@ -508,7 +581,7 @@ function renderTicket() {
       </div>
       <hr>${lines.map((l) => `<div class="line">${l}</div>`).join('')}
       <button class="disagree" id="disagree">Не согласен — отправить раздачу</button>`;
-    lastAdvice = { advice, equity, title };
+    lastAdvice = { advice, equity, title, street: streetOf(count) };
     $('disagree').onclick = copyHand;
   }, 30);
 }
@@ -648,6 +721,8 @@ function startNewHand() {
   state.board = [null, null, null, null, null];
   state.preflop = 'none'; state.limpers = 1; state.raiseTo = 0; state.raiser = 0; state.reraiser = 0;
   state.pot = 0; state.toCall = 0; state.opponents = 1;
+  state.street = -1; state.preMove = null; state.streetLog = []; state.potFix = null;
+  lastAdvice = null;
   persist();
   render();
 }
@@ -659,17 +734,23 @@ function openSettings() {
       ${stepper('bb', 'Большой блайнд', 1, 1)}
       ${stepper('stack', 'Твой стек', state.bb * 10)}
     </div>
+    <div style="margin-top:14px"><div class="label">Анте (платит большой блайнд, размером с ББ)</div>
+      <div class="segments">${[[false, 'Нет'], [true, 'Есть']].map(([v, t]) => `<button data-ante="${v}" aria-pressed="${state.anteOn === v}">${t}</button>`).join('')}</div></div>
     <p class="note">Суммы — в деньгах стола, не в штуках фишек. Игра 250/500: большой блайнд 500.
       Стек решает многое: при глубоких стеках выгодно дёшево уравнивать с маленькими парами и одномастными
       связками (попадёшь — выиграешь много), а с коротким (до 15 ББ) играют «ва-банк или пас».
       Если у соперника денег заметно меньше, чем у тебя, помни: больше них с него не выиграешь.</p>
     <p class="note">Версия приложения: <b>${APP_VERSION}</b></p>`);
   sheet.querySelector('[data-act="close"]').onclick = closeSheet;
+  for (const b of sheet.querySelectorAll('[data-ante]')) b.onclick = () => {
+    state.anteOn = b.dataset.ante === 'true'; persist(); openSettings(); render();
+  };
   bindSteppers(sheet);
 }
 $('settings-btn').onclick = openSettings;
 
 function render() {
+  syncPot();
   renderTable();
   renderHand();
   renderInputs();

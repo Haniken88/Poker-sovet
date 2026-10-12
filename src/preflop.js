@@ -82,11 +82,12 @@ const ru = (amount) => String(chips(amount)).replace('.', ',');
  * Возвращает { action, amount, text, reason, hand }.
  */
 /**
+ * ante — анте большого блайнда (в тех же деньгах, 0 — нет): один на один берётся таблица Нэша с анте.
  * opener — место повысившего (positionInfo), threeBettor — место повысившего второй раз,
  * heroOpened — первым повышал ты сам (тогда «Повысили ×2» = 3-бет против тебя).
  */
 export function preflopAdvice({ hero, position, action = 'none', limpers = 0, raiseTo = 0, bigBlind = 1, stack = Infinity,
-  opener = null, threeBettor = null, heroOpened = false }) {
+  opener = null, threeBettor = null, heroOpened = false, ante = 0 }) {
   const cls = handClass(hero[0], hero[1]);
   const bb = bigBlind;
   const late = position.group === 'late';
@@ -114,12 +115,14 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
   // соперник идёт ва-банк уже, чем по Нэшу, но шире осторожного игрока.
   if (headsUp && stackBB <= HU_PUSH_FOLD_BB && !(isBB && action !== 'raise' && action !== '3bet')) {
     const es = ru(stackBB);
+    const withAnte = ante > 0; // анте платит ББ (≈ 1 ББ) — отдельная таблица
+    const table = withAnte ? 'по таблице Нэша с анте' : 'по таблице Нэша';
     if (action === 'none') {
-      return nashHU(stackBB).push.has(cls)
-        ? result('allin', stack, `Один на один, стек ${es} ББ: по таблице Нэша с ${cls} — ва-банк. Соперник часто сбросит, и банк твой без вскрытия.`)
-        : result('fold', 0, `Один на один, стек ${es} ББ: по таблице Нэша ${cls} слишком слабая даже для ва-банка — пас.`);
+      return nashHU(stackBB, withAnte).push.has(cls)
+        ? result('allin', stack, `Один на один, стек ${es} ББ: ${table} с ${cls} — ва-банк. Соперник часто сбросит, и банк твой без вскрытия.`)
+        : result('fold', 0, `Один на один, стек ${es} ББ: ${table} ${cls} слишком слабая даже для ва-банка — пас.`);
     }
-    const { call, row } = huCall(stackBB);
+    const { call, row } = huCall(stackBB, withAnte);
     const facingAllIn = raiseTo >= stack;
     if (call.has(cls)) {
       return facingAllIn
