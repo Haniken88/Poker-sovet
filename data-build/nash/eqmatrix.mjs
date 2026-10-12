@@ -1,6 +1,7 @@
-// Шансы класс против класса (169 × 169) для расчётов Нэша. Считается ~2 минуты, кэш — .eq-cache.json (не в git).
+// Шансы класс против класса (169 × 169) для расчётов Нэша. Считается ~4 минуты, кэш — .eq-cache.json (не в git).
 import fs from 'fs';
 import { evaluate } from '../../src/evaluator.js';
+import { seededRandom } from '../../src/equity.js';
 import { handClass, allClasses } from '../../src/hands.js';
 
 export const CL = allClasses();
@@ -15,14 +16,16 @@ if (fs.existsSync(cache)) ({ EQ, W } = JSON.parse(fs.readFileSync(cache)));
 else {
   EQ = Array.from({ length: N }, () => new Array(N).fill(0));
   W = Array.from({ length: N }, () => new Array(N).fill(0));
-  let seed = 12345; const rnd = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 4294967296);
+  // 2026-10-12: был самописный генератор (seed * 1103515245 теряет точность в JS → карты выпадали неравномерно,
+  // шансы врали на 1–2,5 %). Теперь — проверенный генератор приложения.
+  const rnd = seededRandom(12345);
   const h1 = new Array(7), h2 = new Array(7), used = new Uint8Array(52);
   for (let i = 0; i < N; i++) for (let j = i; j < N; j++) {
     const pairs = [];
     for (const x of combos[i]) for (const y of combos[j]) if (!x.some((c) => y.includes(c))) pairs.push([x, y]);
     W[i][j] = W[j][i] = pairs.length;
     if (!pairs.length) continue;
-    let s = 0; const ITER = 3000;
+    let s = 0; const ITER = 6000;
     for (let k = 0; k < ITER; k++) {
       const [x, y] = pairs[k % pairs.length]; used.fill(0);
       for (const c of [...x, ...y]) used[c] = 1;

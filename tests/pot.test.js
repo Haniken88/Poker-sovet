@@ -51,8 +51,8 @@ test('ручная поправка банка: дальше ставки при
 test('анте ББ один на один: при 10 ББ ва-банк и колл шире, чем без анте', () => {
   const btn = positionInfo(2, 0), bb = positionInfo(2, 1);
   const go = (hand, pos, extra) => preflopAdvice({ hero: parseCards(hand), position: pos, bigBlind: 1, stack: 10, ...extra }).action;
-  assert.equal(go('Jh 4d', btn, {}), 'fold');
-  assert.equal(go('Jh 4d', btn, { ante: 1 }), 'allin');
+  assert.equal(go('Jh 7d', btn, {}), 'fold'); // HoldemResources: J7o без анте — до 8,5 ББ
+  assert.equal(go('Jh 7d', btn, { ante: 1 }), 'allin');
   assert.equal(go('Kh 6d', bb, { action: 'raise', raiseTo: 10 }), 'fold');
   assert.equal(go('Kh 6d', bb, { action: 'raise', raiseTo: 10, ante: 1 }), 'allin');
 });

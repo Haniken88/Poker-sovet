@@ -59,6 +59,10 @@ export function parseNashRange(text) {
   return result;
 }
 
+// Где PokerStrategy расходится с HoldemResources (holdemresources.net/hune) и наш расчёт согласен с HoldemResources —
+// берём HoldemResources (2 источника из 3, сверка 2026-10-12, tests/sources.test.js): до какого стека ва-банк.
+export const HRC_PUSH_FIX = { T8o: 17.5, '87o': 14.7, '76o': 10.7 };
+
 const parsed = new Map();
 /** Стек в ББ → { push: Set, call: Set } по ближайшей строке таблицы (1–20); ante — с анте ББ (свой расчёт). */
 export function nashHU(stackBB, ante = false) {
@@ -69,6 +73,7 @@ export function nashHU(stackBB, ante = false) {
     const sets = ante
       ? { push: new Set(row.push.split(' ').filter(Boolean)), call: new Set(row.call.split(' ').filter(Boolean)) }
       : { push: parseNashRange(row.push), call: parseNashRange(row.call) };
+    if (!ante) for (const [hand, upTo] of Object.entries(HRC_PUSH_FIX)) if (key <= upTo) sets.push.add(hand);
     parsed.set(id, { ...sets, row, key });
   }
   return parsed.get(id);
