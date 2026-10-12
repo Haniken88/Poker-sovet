@@ -15,7 +15,7 @@ const CLASSES = allClasses();
 const ringCache = new Map();
 function ringSet(ante, behind, stackBB, which) {
   const m = String(Math.min(8, Math.max(1, behind)));
-  const S = String(Math.min(15, Math.max(1, Math.round(stackBB))));
+  const S = String(Math.min(25, Math.max(1, Math.round(stackBB))));
   const id = `${ante ? 1 : 0}:${m}:${S}:${which}`;
   if (!ringCache.has(id)) {
     const hex = NASH_RING[ante ? 1 : 0][m][S][which];
@@ -50,6 +50,11 @@ const OPEN_SIZE = 3.5; // в живой игре открывают крупне
 const OPEN_SIZE_HU = 2.5; // один на один (3,5 ББ — размер для полного стола)
 // Один на один до этого стека — «ва-банк или пас» по таблице Нэша (src/nashHU.js, проверено 2026-10-12).
 export const HU_PUSH_FOLD_BB = 20;
+// Полный стол: 15–25 ББ — часть рук ва-банк, остальное маленький рейз (см. firstIn в preflopAdvice).
+export const MID_STACK_BB = 25;
+// Размер открытия от стека (2026-10-12, источники сходятся: MTT Poker School — 2× до 30 ББ, 2,3× при 40–60;
+// RangerPro — 2–2,2× при 15–25 ББ, 2,5–3× там — частая ошибка). Глубже 60 ББ — живая игра, 3,5 ББ.
+export const openSizeFor = (stackBB, headsUp) => (headsUp ? OPEN_SIZE_HU : stackBB < 30 ? 2 : stackBB < 60 ? 2.3 : OPEN_SIZE);
 const solvers = (v) => `по таблицам ${v.sources} солверов`;
 
 import { OPEN } from './openTables.js';
@@ -115,6 +120,11 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
       act = 'allin'; amount = stack;
       reason += ' Стек маленький, поэтому сразу ва-банк.';
     }
+    // Повторное повышение при стеке до 30 ББ — сразу ва-банк (GTO Wizard: при 20–25 ББ 3-бет делают ва-банком).
+    if (act === 'raise' && (action === 'raise' || action === '3bet') && stack / bigBlind <= 30) {
+      act = 'allin'; amount = stack;
+      reason += ' При стеке до 30 ББ повторно повышают сразу ва-банком: обычный 3-бет съел бы треть стека.';
+    }
     return {
       action: act,
       amount: amount ? chips(amount) : 0,
@@ -126,6 +136,7 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
 
   const stackBB = stack / bb;
   const headsUp = position.players === 2;
+  const openSize = () => openSizeFor(stackBB, headsUp);
 
   // Один на один, стек до 20 ББ: малый блайнд — ва-банк или пас по таблице Нэша;
   // против ва-банка (или повышения) — колл по «средней» таблице (src/huCall.js):
@@ -190,35 +201,51 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
 
   if (action === 'none') {
     if (isBB) return result('check', 0, 'Все сбросили до тебя — ты уже забрал блайнды.');
-    const v = position.behind <= 5 ? chartLookup(`open:${chartPos(position)}`, cls) : null;
-    if (v) {
-      // Живая игра (по умолчанию): профи против слабых живых соперников открывают на 5–10 % рук больше —
-      // руку открываем, если солверы хоть иногда открывают её с этого места, а с LJ и HJ ещё
-      // и то, что уверенно открывают на соседнем месте позже.
-      const key = chartPos(position);
-      const NEXT = { LJ: 'HJ', HJ: 'CO' };
-      const threshold = key === 'SB' ? 35 : 15;
-      const nextV = NEXT[key] ? chartLookup(`open:${NEXT[key]}`, cls) : null;
-      const strict = v.top === 'raise';
-      const live = LIVE_GAME && (v.raise >= threshold || (nextV && nextV.raise >= 60));
-      const opens = strict || live;
-      const why = strict ? `${cls} с этого места открывают: ${solvers(v)} рейз в ${v.raise} % случаев.`
-        : live ? `${cls} — открытие для живой игры: солверы с этого места открывают её редко (${v.raise} %), но против слабых соперников профи играют шире.`
-        : `${cls} с этого места не открывают: ${solvers(v)} рейз только в ${v.raise} % случаев.`;
-      return { ...result(opens ? 'raise' : 'fold', opens ? (headsUp ? OPEN_SIZE_HU : OPEN_SIZE) * bb : 0, why), close: v.close || (live && !strict) };
+    const normal = firstIn();
+    // 15–25 ББ за полным столом (сходятся GTO Wizard, Preflop Wizard, MTT Poker School): открывают маленьким рейзом,
+    // а маленькие пары и слабые тузы с поздних мест — сразу ва-банк (после флопа играют плохо). Ва-банк — только если
+    // рука проходит по Нэшу для этого места; руки, которые не открывают, — пас (чистый Нэш при 20 ББ слишком широк).
+    if (!headsUp && stackBB > 15 && stackBB <= MID_STACK_BB && (position.group === 'late' || position.key === 'SB')) {
+      const push = ringSet(ante > 0, position.behind, stackBB, 0);
+      const poorPostflop = (cls.length === 2 && rankOf(hero[0]) <= 7) || /^A[2-9][so]$/.test(cls);
+      if (push.has(cls) && poorPostflop) {
+        return result('allin', stack, `Стек ${ru(stackBB)} ББ, позднее место: с ${cls} выгоднее сразу ва-банк, чем маленький рейз — после флопа такая рука играет плохо, а ва-банк часто забирает блайнды${ante > 0 ? ' и анте' : ''} без борьбы (проходит по таблице Нэша).`);
+      }
     }
-    // Ранние места полного стола: в живой игре — на одну ступень свободнее.
-    if (LIVE_GAME && !inRange(cls, openRange(position.behind)) && inRange(cls, openRange(position.behind - 1))) {
-      return { ...result('raise', OPEN_SIZE * bb, `${cls} — открытие для живой игры: по строгим таблицам с этого места пас, но против слабых соперников можно шире.`), close: true };
-    }
-    if (inRange(cls, openRange(position.behind))) {
-      return result('raise', OPEN_SIZE * bb, `${cls} достаточно сильна, чтобы входить первым с этой позиции.`);
-    }
-    // На грани: с соседнего (более позднего) места эту руку уже открывают.
-    const edge = inRange(cls, openRange(position.behind - 1));
-    return { ...result('fold', 0, edge
-      ? `${cls} — на самой границе: с этого места по таблицам пас, а на одно место позже уже открывают.`
-      : `${cls} слишком слабая для этой позиции: после тебя ещё ${position.behind} игроков.`), close: edge };
+    return normal;
+  }
+
+  // Первым в раздачу (до тебя все сбросили) — по таблицам открытия.
+  function firstIn() {
+      const v = position.behind <= 5 ? chartLookup(`open:${chartPos(position)}`, cls) : null;
+      if (v) {
+        // Живая игра (по умолчанию): профи против слабых живых соперников открывают на 5–10 % рук больше —
+        // руку открываем, если солверы хоть иногда открывают её с этого места, а с LJ и HJ ещё
+        // и то, что уверенно открывают на соседнем месте позже.
+        const key = chartPos(position);
+        const NEXT = { LJ: 'HJ', HJ: 'CO' };
+        const threshold = key === 'SB' ? 35 : 15;
+        const nextV = NEXT[key] ? chartLookup(`open:${NEXT[key]}`, cls) : null;
+        const strict = v.top === 'raise';
+        const live = LIVE_GAME && (v.raise >= threshold || (nextV && nextV.raise >= 60));
+        const opens = strict || live;
+        const why = strict ? `${cls} с этого места открывают: ${solvers(v)} рейз в ${v.raise} % случаев.`
+          : live ? `${cls} — открытие для живой игры: солверы с этого места открывают её редко (${v.raise} %), но против слабых соперников профи играют шире.`
+          : `${cls} с этого места не открывают: ${solvers(v)} рейз только в ${v.raise} % случаев.`;
+        return { ...result(opens ? 'raise' : 'fold', opens ? openSize() * bb : 0, why), close: v.close || (live && !strict) };
+      }
+      // Ранние места полного стола: в живой игре — на одну ступень свободнее.
+      if (LIVE_GAME && !inRange(cls, openRange(position.behind)) && inRange(cls, openRange(position.behind - 1))) {
+        return { ...result('raise', openSize() * bb, `${cls} — открытие для живой игры: по строгим таблицам с этого места пас, но против слабых соперников можно шире.`), close: true };
+      }
+      if (inRange(cls, openRange(position.behind))) {
+        return result('raise', openSize() * bb, `${cls} достаточно сильна, чтобы входить первым с этой позиции.`);
+      }
+      // На грани: с соседнего (более позднего) места эту руку уже открывают.
+      const edge = inRange(cls, openRange(position.behind - 1));
+      return { ...result('fold', 0, edge
+        ? `${cls} — на самой границе: с этого места по таблицам пас, а на одно место позже уже открывают.`
+        : `${cls} слишком слабая для этой позиции: после тебя ещё ${position.behind} игроков.`), close: edge };
   }
 
   // Сколько реально доплатить (блайнд уже на столе) и во сколько раз стек больше этой цены.
@@ -275,7 +302,7 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
   }
 
   if (action === 'limp') {
-    const raiseSize = (OPEN_SIZE + limpers) * bb;
+    const raiseSize = (openSize() + limpers) * bb;
     // Повышаем, если рука входит в диапазон с запасом: каждый лимпер — как два лишних игрока после тебя.
     if (inRange(cls, openRange(position.behind + 2 * limpers + 1))) {
       return result('raise', raiseSize, `${cls} — сильная рука, повышай и забирай инициативу у лимперов.`);

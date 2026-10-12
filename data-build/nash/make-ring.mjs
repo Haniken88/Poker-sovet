@@ -70,7 +70,7 @@ const toHex = (f) => { let bits = ''; for (let i = 0; i < N; i++) bits += f[i] >
 const pct = (f) => Math.round(CL.reduce((s, c, i) => s + (f[i] >= 0.5 ? combos[i].length : 0), 0) / 1.326) / 10;
 
 const out = { 0: {}, 1: {} };
-const STACKS = Array.from({ length: 15 }, (_, i) => i + 1);
+const STACKS = Array.from({ length: 25 }, (_, i) => i + 1);
 for (const A of [0, 1]) {
   for (let m = 1; m <= 8; m++) {
     out[A][m] = {};
