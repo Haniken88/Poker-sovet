@@ -9,7 +9,7 @@ import { proStatus, checkCode, PRO_PRICE, SHORT_STACK_PRO_BB, TRIAL_DAYS, PRO_EN
 import { GEOMETRY, DEALER_XY, SEAT_XY, SEAT_COUNT, activeSeats, seatPosition, nextActive } from './src/table.js';
 
 // Номер версии — поднимать при каждом обновлении вместе с CACHE в sw.js.
-const APP_VERSION = 32;
+const APP_VERSION = 33;
 const $ = (id) => document.getElementById(id);
 const RANK_LABEL = { 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
 const rankLabel = (r) => RANK_LABEL[r] || String(r);
@@ -526,8 +526,11 @@ $('level-up').onclick = () => {
   if (!next) return;
   state.bb = next; persist(); render();
 };
+const levelsText = (list = state.levels) => (list.length
+  ? `Уровни: ${list.map(fmt).join(' → ')}. Вверху кнопка «▲» — следующий уровень одним касанием.`
+  : 'Впиши большие блайнды по порядку через запятую — вверху появится кнопка «▲».');
 // «40 000, 50 000, 60 000» → [40000, 50000, 60000] (пробелы внутри чисел — тысячи).
-const parseLevels = (text) => [...new Set(text.split(/[,;\n]+/).map((t) => Number(t.replace(/[^\d]/g, ''))).filter((v) => v > 0))].sort((a, b) => a - b);
+const parseLevels = (text) => [...new Set(text.split(/[,;.\n]+/).map((t) => Number(t.replace(/[^\d]/g, ''))).filter((v) => v > 0))].sort((a, b) => a - b);
 
 // ---------- Совет ----------
 let adviceTimer = 0;
@@ -867,8 +870,8 @@ function openSettings() {
     ${isPro() ? `<div style="margin-top:14px"><div class="label">Анте (платит большой блайнд, размером с ББ)</div>
       <div class="segments">${[[false, 'Нет'], [true, 'Есть']].map(([v, t]) => `<button data-ante="${v}" aria-pressed="${state.anteOn === v}">${t}</button>`).join('')}</div></div>
     <div style="margin-top:14px"><div class="label">Уровни турнира — большие блайнды через запятую</div>
-      <input class="levels-input" id="levels" inputmode="numeric" placeholder="40 000, 50 000, 60 000, 80 000" value="${state.levels.map(fmt).join(', ')}">
-      <p class="note">Вверху появится кнопка «▲» — следующий уровень одним касанием.</p></div>`
+      <input class="levels-input" id="levels" inputmode="decimal" placeholder="40000, 50000, 60000, 80000" value="${state.levels.join(', ')}">
+      <p class="note" id="levels-seen">${levelsText()}</p></div>`
     : `<button class="locked-row" data-act="pro">Анте и уровни турнира <span>PRO</span></button>`}
     <p class="note">Суммы — в деньгах стола, не в штуках фишек. Игра 250/500: большой блайнд 500.
       Стек решает многое: при глубоких стеках выгодно дёшево уравнивать с маленькими парами и одномастными
@@ -877,7 +880,11 @@ function openSettings() {
     <p class="note">Версия приложения: <b>${APP_VERSION}</b></p>`);
   sheet.querySelector('[data-act="close"]').onclick = closeSheet;
   const levels = sheet.querySelector('#levels');
-  if (levels) levels.onchange = (e) => { state.levels = parseLevels(e.target.value); persist(); render(); };
+  // Клавиатура «цифры с запятой» (на iPhone у чисто цифровой нет запятой). Сразу показываем, что поняли.
+  if (levels) {
+    levels.oninput = (e) => { sheet.querySelector('#levels-seen').innerHTML = levelsText(parseLevels(e.target.value)); };
+    levels.onchange = (e) => { state.levels = parseLevels(e.target.value); persist(); render(); };
+  }
   for (const b of sheet.querySelectorAll('[data-act="pro"]')) b.onclick = openPro;
   for (const b of sheet.querySelectorAll('[data-ante]')) b.onclick = () => {
     state.anteOn = b.dataset.ante === 'true'; persist(); openSettings(); render();
