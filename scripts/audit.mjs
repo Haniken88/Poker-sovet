@@ -1,7 +1,7 @@
 // Большая проверка советов (2026-10-12, просьба владельца «чтобы не было ни дыр, ни ошибок»).
 // Запуск: node scripts/audit.mjs → печатает сводку; подробности ошибок — по одной строке.
 // Стол на 6 игроков, по 100 случайных раздач на позицию + полный перебор 169 рук по ситуациям.
-import { preflopAdvice, preflopEquity, HU_PUSH_FOLD_BB } from '../src/preflop.js';
+import { preflopAdvice, preflopEquity, HU_PUSH_FOLD_BB, chartLookup, chartPos } from '../src/preflop.js';
 import { postflopAdvice } from '../src/postflop.js';
 import { positionInfo } from '../src/positions.js';
 import { allClasses } from '../src/hands.js';
@@ -128,6 +128,19 @@ for (const players of [6, 9, 2]) for (let o = 0; o < players; o++) for (let h = 
       }
     }
     for (const c of ALWAYS_CALL) if (!plays(decide.get(c))) note('сильная рука не уравнивает ва-банк', `${players} игроков, ${opener.key} → ${position.key}, ${stackBB} ББ: ${c}`);
+  }
+}
+
+// ---------- 3в. Короткий стек (до 30 ББ) против повышения: нет коллов, которых нет у солверов ----------
+for (const players of [6, 9]) for (let o = 0; o < players; o++) for (let h = 0; h < players; h++) {
+  const opener = positionInfo(players, o), position = positionInfo(players, h);
+  if (opener.behind <= position.behind || position.key === 'BB' && opener.key === 'SB') continue;
+  for (const stackBB of [16, 20, 25, 30]) for (const raiseTo of [2, 2.5]) for (const c of CL) {
+    const a = preflopAdvice({ hero: cardsFor(c), position, action: 'raise', raiseTo, opener, bigBlind: 1, stack: stackBB, ante: 1 });
+    if (a.action === 'call' && !['BB', 'SB'].includes(position.key)) {
+      const v = chartLookup(`vsopen:${chartPos(position)}:${chartPos(opener)}`, c);
+      if (v && v.call === 0) note('колл, которого нет у солверов', `${players} игроков, ${opener.key} → ${position.key}, ${stackBB} ББ, рейз ${raiseTo}: ${c}`);
+    }
   }
 }
 

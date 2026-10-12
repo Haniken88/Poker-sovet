@@ -38,3 +38,12 @@ test('при стеке до 30 ББ повторное повышение — �
   assert.equal(a.action, 'allin');
   assert.equal(a.amount, 22);
 });
+
+test('22 ББ против мин-рейза: AJo и 77 — не колл (солверы тут не уравнивают), AQo — ва-банк', () => {
+  const vs = (hand) => go(hand, 8, 22, { action: 'raise', raiseTo: 2, ante: 1, opener: positionInfo(9, 5) }).action;
+  assert.equal(vs('Ad Jc'), 'fold');
+  assert.equal(vs('7s 7d'), 'fold');
+  assert.equal(vs('Ah Qd'), 'allin');
+  // При глубоком стеке правило «мин-рейз — можно уравнять» остаётся.
+  assert.equal(go('Ad Jc', 8, 100, { action: 'raise', raiseTo: 2, opener: positionInfo(9, 5) }).action, 'call');
+});
