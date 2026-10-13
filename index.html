@@ -19,6 +19,7 @@
     <h1>Покер <em>·</em> совет</h1>
     <div class="top-actions">
       <span class="street" id="street">Префлоп</span>
+      <button class="train-btn" id="train-btn">Тренажёр</button>
       <button class="icon-btn" id="settings-btn" aria-label="Настройки блайндов">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
       </button>
@@ -49,7 +50,19 @@
     </section>
     <section class="inputs" id="inputs"></section>
   </main>
+  <section class="trainer" id="trainer" hidden aria-label="Тренажёр">
+    <div class="tr-topics" id="tr-topics"></div>
+    <div class="tr-progress" id="tr-progress"></div>
+    <div class="table-wrap" id="tr-table">
+      <div class="rail"><div class="felt"></div></div>
+      <div class="center" id="tr-center"></div>
+      <div id="tr-seats"></div>
+    </div>
+    <div class="hand tr-hand" id="tr-hand"></div>
+    <div class="tr-answers" id="tr-answers"></div>
+  </section>
   <aside class="ticket" id="ticket" aria-live="polite"></aside>
+  <aside class="ticket tr-ticket" id="tr-ticket" hidden aria-live="polite"></aside>
   <div class="dim" id="dim"></div>
   <div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
   <script type="module" src="app.js"></script>

@@ -279,3 +279,11 @@
   data-build/solver/pc-flops/poker (tasks/*.txt, run.bat, README.txt), TexasSolver v0.2.0 Windows с github
   bupticybee/TexasSolver/releases (console_solver.exe, те же команды). Результаты он кладёт в pc-flops/poker/results/.
   Дальше: сравнить ривер и флоп с приложением (compare.mjs сейчас берёт только первую улицу — дописать ривер/флоп).
+
+## Тренажёр (2026-10-13)
+- Кнопка «Тренажёр» в шапке → отдельный экран (body.training), свой стол; главный стол/стек/уровни не трогаются. Код:
+  src/trainer.js (вопросы: темы short / vsShove / open / vsRaise / mix; ответ = preflopAdvice; спорные места не берём;
+  «пас» переигрывается, чтобы был ~половиной), trainer-view.js (экран), стили «Тренажёр» в app.css, tests/trainer.test.js.
+- Серия 20, ошибка возвращается через 3 вопроса, итог «N из 20» и где чаще ошибался. Бесплатно 10 вопросов/день
+  (localStorage 'poker-trainer'), в Pro без лимита (пока PRO_ENFORCED=false — без лимита у всех). Только до флопа.
+- Подписи действий под местами («пас», «рейз 2,5 ББ», «ва-банк»); у краёв стола прижаты внутрь (edge-l/edge-r).

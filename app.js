@@ -6,11 +6,12 @@ import { postflopAdvice, whoBeatsYou, percentText } from './src/postflop.js';
 import { handClass } from './src/hands.js';
 import { preflopPot, currentPot, streetMoney } from './src/pot.js';
 import { stepBB } from './src/blinds.js';
+import { openTrainer, closeTrainer } from './trainer-view.js';
 import { proStatus, checkCode, PRO_PRICE, SHORT_STACK_PRO_BB, TRIAL_DAYS, PRO_ENFORCED } from './src/pro.js';
 import { GEOMETRY, DEALER_XY, SEAT_XY, SEAT_COUNT, activeSeats, seatPosition, nextActive } from './src/table.js';
 
 // Номер версии — поднимать при каждом обновлении вместе с CACHE в sw.js.
-const APP_VERSION = 35;
+const APP_VERSION = 36;
 const $ = (id) => document.getElementById(id);
 const RANK_LABEL = { 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
 const rankLabel = (r) => RANK_LABEL[r] || String(r);
@@ -840,7 +841,7 @@ function openPro() {
       <li><b>Короткий стек</b> — когда ва-банк, а когда пас (до ${SHORT_STACK_PRO_BB} ББ), и с чем уравнивать чужой ва-банк. По таблицам Нэша, сверенным с HoldemResources.</li>
       <li><b>Анте</b> — советы и таблицы с анте, как в турнирах.</li>
       <li><b>Уровни турнира</b> — блайнды и анте меняются одной кнопкой «▲».</li>
-      <li class="soon"><b>Тренажёр</b> без ограничений — скоро.</li>
+      <li><b>Тренажёр</b> без ограничений (бесплатно — 10 вопросов в день).</li>
       <li class="soon"><b>Статистика</b> турниров — скоро.</li>
     </ul>
     <p class="pro-status">${st.kind === 'open' ? 'Сейчас всё открыто бесплатно для всех — идёт проверка приложения.'
@@ -895,6 +896,14 @@ function openSettings() {
 }
 $('settings-btn').onclick = openSettings;
 
+// Тренажёр: отдельный экран со своим столом — твой стол, стек и уровни не трогаются.
+function exitTrainer() { closeTrainer(); $('train-btn').textContent = 'Тренажёр'; render(); }
+$('train-btn').onclick = () => {
+  if (document.body.classList.contains('training')) return exitTrainer();
+  $('train-btn').textContent = 'Выйти';
+  openTrainer({ isPro, openPro, onExit: exitTrainer });
+};
+
 function render() {
   syncPot();
   renderLevel();
@@ -906,9 +915,11 @@ function render() {
 
 // Карточка совета прилеплена к низу экрана: запас под страницей = её высота, чтобы она не закрывала поля и кнопки.
 if ('ResizeObserver' in window) {
-  new ResizeObserver(() => {
-    document.body.style.paddingBottom = `calc(${$('ticket').offsetHeight + 24}px + var(--safe-bottom))`;
-  }).observe($('ticket'));
+  const ro = new ResizeObserver(() => {
+    const t = document.body.classList.contains('training') ? $('tr-ticket') : $('ticket');
+    document.body.style.paddingBottom = `calc(${t.offsetHeight + 24}px + var(--safe-bottom))`;
+  });
+  ro.observe($('ticket')); ro.observe($('tr-ticket'));
 }
 
 // Первый запуск: неделя Pro в подарок (не мешает нажатиям, сама пропадает).
