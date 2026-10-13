@@ -98,7 +98,9 @@ function situation(q) {
   const before = !opener ? 'до тебя все сбросили'
     : q.topic === 'vsShove' ? `${posName(q.opener)} пошёл ва-банк, остальные сбросили`
     : `${posName(q.opener)} повысил до ${ru(q.raiseTo)} ББ, остальные сбросили`;
-  const after = p.behind > 0 ? ` После тебя ходят ещё ${p.behind}.` : ' После тебя никто не ходит.';
+  // Сколько ходит после тебя до флопа. Вдвоём после баттона — только ББ (в positions.js behind=2 — условность для таблиц).
+  const left = q.players === 2 ? (p.key === 'BB' ? 0 : 1) : p.behind;
+  const after = left === 1 ? ' После тебя ходит ещё один игрок.' : left > 1 ? ` После тебя ходят ещё ${left}.` : ' После тебя никто не ходит.';
   return `Ты — <b>${posName(p)}</b>, ${q.players} за столом, стек <b>${q.stackBB} ББ</b>${q.ante ? ', анте' : ''}. ${before[0].toUpperCase() + before.slice(1)}.${after}`;
 }
 
