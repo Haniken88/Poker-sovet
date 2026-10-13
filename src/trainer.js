@@ -77,12 +77,11 @@ export function makeQuestion(topic, rnd) {
     else seatsActs[off] = 'fold';
   });
 
-  const options = kind === 'vsShove' ? ['fold', 'call']
-    : kind === 'short' ? (stackBB > 15 ? ['fold', 'raise', 'allin'] : ['fold', 'allin'])
-    : kind === 'open' ? (stackBB <= 25 ? ['fold', 'raise', 'allin'] : ['fold', 'raise'])
-    : stackBB <= 30 ? ['fold', 'call', 'allin'] : ['fold', 'call', 'raise'];
-  if (!options.includes(correct)) return null;
-  return { topic: kind, players, offset, stackBB, ante, hero, seatsActs, raiseTo, position, opener,
+  // Всегда четыре варианта (просьба владельца 2026-10-13), кроме ответа на ва-банк: там повысить нельзя — пас или колл.
+  const options = kind === 'vsShove' ? ['fold', 'call'] : ['fold', 'call', 'raise', 'allin'];
+  // Размер повторного повышения (как в советах): с блайндов ×4, иначе ×3.
+  const threeBetTo = (position.group === 'blinds' ? 4 : 3) * raiseTo;
+  return { topic: kind, players, offset, stackBB, ante, hero, seatsActs, raiseTo, threeBetTo, position, opener,
     options, correct, advice };
 }
 

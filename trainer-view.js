@@ -88,8 +88,8 @@ const ACT_TEXT = (a) => (a === 'fold' ? 'пас' : a === 'allin' ? 'ва-бан�
 function answerLabel(a, q) {
   if (a === 'fold') return 'Пас';
   if (a === 'allin') return 'Ва-банк';
-  if (a === 'call') return q.topic === 'vsShove' ? 'Колл' : `Колл ${ru(q.raiseTo)} ББ`;
-  return q.topic === 'vsRaise' ? 'Рейз (3-бет)' : `Рейз ${ru(openSizeFor(q.stackBB, q.players === 2))} ББ`;
+  if (a === 'call') return q.topic === 'vsShove' ? 'Колл' : q.raiseTo ? `Колл ${ru(q.raiseTo)} ББ` : 'Колл 1 ББ';
+  return q.raiseTo ? `3-бет до ${ru(q.threeBetTo)} ББ` : `Рейз ${ru(openSizeFor(q.stackBB, q.players === 2))} ББ`;
 }
 
 function situation(q) {

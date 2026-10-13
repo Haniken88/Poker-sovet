@@ -10,6 +10,7 @@ test('правильный ответ всегда совпадает с сов�
   for (const [topic] of TOPICS) for (let i = 0; i < 300; i++) {
     const q = nextQuestion(topic, rnd);
     assert.ok(q.options.includes(q.correct), `${topic}: нет кнопки ${q.correct}`);
+    assert.equal(q.options.length, q.topic === 'vsShove' ? 2 : 4);
     assert.ok(!q.advice.close, 'спорное место попало в вопросы');
     const again = preflopAdvice({ hero: q.hero, position: q.position, action: q.topic === 'short' || q.topic === 'open' ? 'none' : 'raise',
       raiseTo: q.topic === 'vsShove' ? q.stackBB : q.raiseTo, bigBlind: 1, stack: q.stackBB, opener: q.opener, ante: q.ante });

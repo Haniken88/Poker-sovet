@@ -273,7 +273,7 @@ body.training main, body.training .stakes-row, body.training #ticket, body.train
 .tr-sit b { color: var(--ivory); }
 .tr-answers { padding: 4px 18px 0; }
 .tr-q { font: 400 22px Prata; text-align: center; margin: 14px 0 10px; }
-.tr-buttons { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; }
+.tr-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .tr-buttons button { min-height: 50px; border-radius: 12px; background: var(--panel); border: 1px solid var(--panel-line);
   color: var(--text); font: 800 14.5px Manrope; transition: background-color .18s ease-out, opacity .18s ease-out; }
 .tr-buttons button:active:not(:disabled) { background: var(--panel-line); }
