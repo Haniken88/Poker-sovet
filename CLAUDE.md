@@ -274,3 +274,8 @@
   ставка с 80 %, иначе чек (было как в позиции); повышал+в позиции — как раньше (ставка с 70 %, блеф < 40 %; пробовал 60 % — хуже).
   МБ против ББ: совпадение A 47→68 %, B 44→63 %, грубых 27→11/16 %. Ставить/чек «повышал, в позиции» солвер сам мешает
   (~50/50) — потолок ~60–80 %. Частоты солвера — data-build/solver/bet-freq.mjs; тесты — tests/postflop-position.test.js.
+- 2026-10-13: ночь — сервер: /root/poker-solver/batch3.sh (те же 37 тёрнов с ривером, set_dump_rounds 2, out3_*.json
+  ~90 МБ, таймер poker-river 23:00 Тольятти, лог batch3.log). Флопы — на ПК владельца (16 ГБ): папка
+  data-build/solver/pc-flops/poker (tasks/*.txt, run.bat, README.txt), TexasSolver v0.2.0 Windows с github
+  bupticybee/TexasSolver/releases (console_solver.exe, те же команды). Результаты он кладёт в pc-flops/poker/results/.
+  Дальше: сравнить ривер и флоп с приложением (compare.mjs сейчас берёт только первую улицу — дописать ривер/флоп).
