@@ -27,3 +27,22 @@ test('уравнял на ББ против баттона — ходишь пе
 test('уравнял на баттоне против катоффа, тебе прочекали: сильная — ставка', () => {
   assert.equal(go('Ah Ad', 'As 8c 3d 2h', { action: 'raise', hero: BTN, raiser: CO }), 'bet');
 });
+
+// ФЛОП (2026-10-14, 6 флопов TexasSolver): свои правила, не как на тёрне.
+const goFlop = (hand, board, preflop, toCall = 0) => postflopAdvice({ hero: parseCards(hand), board: parseCards(board), opponents: 1, pot: 6,
+  toCall, preflopAction: preflop.action, stack: 100, preflop, iterations: 4000, random: seededRandom(5), compareStyles: false }).action;
+
+test('флоп: кто повышал до флопа — ставит почти всегда, даже без попадания', () => {
+  assert.equal(goFlop('Ah Qd', 'Kc 7s 2d', { action: 'none', hero: BTN }), 'bet');
+  assert.equal(goFlop('6h 5h', 'Kc Js 2d', { action: 'none', hero: BTN }), 'bet');
+});
+
+test('флоп: уравнял и ходишь первым — средняя рука чек, сет — ставка', () => {
+  assert.equal(goFlop('Qh Qd', 'Kc 7s 2d', { action: 'raise', hero: BB, raiser: BTN }), 'check');
+  assert.equal(goFlop('7h 7d', 'Kc 7s 2d', { action: 'raise', hero: BB, raiser: BTN }), 'bet');
+});
+
+test('флоп: против ставки уравниваем, как только шанс не ниже цены (без запаса)', () => {
+  // Пара с хорошим кикером против ставки полбанка — колл.
+  assert.equal(goFlop('Ks Qh', 'Kc 7s 2d', { action: 'raise', hero: BB, raiser: BTN }, 3), 'call');
+});

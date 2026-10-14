@@ -191,6 +191,27 @@ export function postflopAdvice({
     const villain = heroCaller ? (preflop.action === '3bet' ? preflop.reraiser : preflop.raiser) : null;
     const heroIP = heroCaller ? Boolean(villain && preflop.hero && order(preflop.hero) > order(villain))
       : heroAggressor ? preflop.hero.key !== 'SB' : false;
+    // ФЛОП (2026-10-14, 6 флопов TexasSolver с ПК владельца, data-build/solver/flop-freq.mjs): тут солвер играет иначе, чем на тёрне.
+    if (board.length === 3 && headsUp && !(spr < 1.5 && topPairPlus)) {
+      if (heroAggressor) {
+        // Кто повышал до флопа — ставит почти всегда (солвер: 94–100 % рук при любом шансе), небольшой ставкой.
+        return result('bet', pot * 0.5, equity >= 0.6
+          ? `Шанс ${percent} %. Ты повышал до флопа — ставь полбанка: пусть платят худшие руки.`
+          : `Шанс ${percent} %. Ты повышал до флопа — на флопе солвер ставит почти всегда, даже без попадания: полбанка часто заберут банк сразу.`);
+      }
+      if (heroCaller && !heroIP) {
+        // Уравнял и ходишь первым: ставка только с очень сильными (солвер 62–87 %), остальное — чек.
+        if (equity >= 0.8) return result('bet', pot * 0.5, `Шанс ${percent} % — очень сильная рука: ставь полбанка сам, не жди.`);
+        close = equity >= 0.3 && equity < 0.7;
+        return result('check', 0, `Первым против того, кто повышал до флопа, обычно чек (шанс ${percent} %) — он почти всегда поставит сам.`);
+      }
+      if (heroCaller && heroIP) {
+        // Уравнял, тебе прочекали: ставка уже со средними (солвер 56–86 % от шанса 50 %).
+        if (equity >= 0.5) { close = equity < 0.7; return result('bet', pot * 0.5, `Шанс ${percent} %. Повышавший прочекал — ставь полбанка.`); }
+        close = equity >= 0.3;
+        return result('check', 0, `Шанс ${percent} % — посмотри следующую карту бесплатно.`);
+      }
+    }
     if (heroCaller && headsUp && !heroIP && !(spr < 1.5 && topPairPlus)) {
       // Ты уравнивал и ходишь первым: почти всегда чек — солвер ставит тут лишь в 0–35 % случаев.
       close = equity >= 0.85;
@@ -263,7 +284,9 @@ export function postflopAdvice({
   // Будущий выигрыш — только для настоящих дро (4+ аута), а не для рук «ни с чем».
   const realDraw = drawing && draws.outs >= 4;
   const futureWin = realDraw && spr >= 4 && bet <= pot ? 0.3 * Math.min(stack - price, pot + bet + price) : 0;
-  const realized = drawing && board.length === 3 ? equity * 0.87 : equity;
+  // На флопе (не ва-банк) солвер уравнивает, как только шанс не ниже цены колла (2026-10-14) — без скидки на дро и без запаса.
+  const flopCall = board.length === 3 && bet < stack;
+  const realized = drawing && board.length === 3 && !flopCall ? equity * 0.87 : equity;
   const drawOdds = price / (pot + bet + price + futureWin);
 
   // Решение зависит от того, как блефует соперник? Скажем об этом прямо.
@@ -276,7 +299,7 @@ export function postflopAdvice({
   // Запас к цене колла (подобран по солверу): против обычной ставки 6 %, если ставит первым тот,
   // кто до флопа только уравнивал, — 10 %; против ва-банка 3 % и 25 % соответственно.
   const allInBet = bet >= stack;
-  const margin = heroAggressor ? (allInBet ? 0.25 : 0.10) : (allInBet ? 0.03 : 0.06);
+  const margin = flopCall ? 0 : heroAggressor ? (allInBet ? 0.25 : 0.10) : (allInBet ? 0.03 : 0.06);
   close = Math.abs(realized - (drawOdds + margin)) < 0.04;
   // С какого шанса колл выгоден (цена колла + запас) — это и показываем игроку.
   needPct = Math.round((drawOdds + margin) * 100);
