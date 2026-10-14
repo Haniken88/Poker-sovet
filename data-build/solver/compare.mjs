@@ -8,17 +8,26 @@ import { positionInfo } from '../../src/positions.js';
 import { postflopAdvice } from '../../src/postflop.js';
 import { seededRandom } from '../../src/equity.js';
 
-const [resultFile, boardText, itersArg, opener = 'BTN', stackArg = '100'] = process.argv.slice(2);
+const [resultFile, boardText, itersArg, opener = 'BTN', stackArg = '100', mode = 'open', threeBettor = 'BB'] = process.argv.slice(2);
+const threeBet = mode === '3bet';
 const tree = JSON.parse(readFileSync(resultFile, 'utf8'));
 const board = boardText.split(/\s+/).map(cardFromString);
 const iterations = Number(itersArg || 2500);
-const BB_POS = positionInfo(9, 2);
-const OPEN_POS = positionInfo(9, { BTN: 0, CO: 8, SB: 1 }[opener]);
-const POT = opener === 'SB' ? 50 : 55, STACK = Number(stackArg) * 10 - 25; // в десятых ББ
-const openerIP = opener !== 'SB';
+const OFF = { BTN: 0, SB: 1, BB: 2, CO: 8, HJ: 7, LJ: 6 };
+const BB_POS = positionInfo(9, OFF[threeBet ? threeBettor : 'BB']); // второй игрок: ББ или тот, кто сделал 3-бет
+const OPEN_POS = positionInfo(9, OFF[opener]);
+const inPot = [opener, threeBet ? threeBettor : 'BB'];
+const dead = (inPot.includes('SB') ? 0 : 5) + (inPot.includes('BB') ? 0 : 10);
+const POT = (threeBet ? 200 : 50) + dead, STACK = Number(stackArg) * 10 - (threeBet ? 100 : 25); // в десятых ББ
+const order = (k) => ['SB', 'BB', 'LJ', 'HJ', 'CO', 'BTN'].indexOf(k);
+const openerIP = order(opener) > order(threeBet ? threeBettor : 'BB');
 // Кто ходит первым после флопа (без позиции) и кто в позиции.
 const OOP = openerIP ? 'BB' : 'OPEN', IP = openerIP ? 'OPEN' : 'BB';
-const ctx = (who) => (who === 'BB' ? { action: 'raise', hero: BB_POS, raiser: OPEN_POS } : { action: 'none', hero: OPEN_POS });
+// Как раздачу видит приложение. 3-бет: открывший уравнял 3-бет ('3bet', heroOpened); сделавший 3-бет в приложении
+// записан как «до тебя повысили» ('raise') + свой ход до флопа — повышение (heroMove) — см. postflop.js hero3bet.
+const ctx = (who) => (who === 'BB'
+  ? { action: 'raise', hero: BB_POS, raiser: OPEN_POS, ...(threeBet ? { hero3bet: true } : {}) }
+  : threeBet ? { action: '3bet', hero: OPEN_POS, raiser: OPEN_POS, reraiser: BB_POS, heroOpened: true } : { action: 'none', hero: OPEN_POS });
 
 // Группы действий: fold / check / call / bet / raise.
 const group = (a) => (a.startsWith('FOLD') ? 'fold' : a.startsWith('CHECK') ? 'check' : a.startsWith('CALL') ? 'call'

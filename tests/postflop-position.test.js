@@ -46,3 +46,15 @@ test('флоп: против ставки уравниваем, как толь�
   // Пара с хорошим кикером против ставки полбанка — колл.
   assert.equal(goFlop('Ks Qh', 'Kc 7s 2d', { action: 'raise', hero: BB, raiser: BTN }, 3), 'call');
 });
+
+test('сделал 3-бет до флопа — на флопе ты агрессор: ставишь, а не чекаешь как «уравнявший»', () => {
+  // ББ сделал 3-бет против баттона, ходит первым на флопе.
+  assert.equal(goFlop('Ah Qd', 'Kc 7s 2d', { action: 'raise', hero: BB, raiser: BTN, hero3bet: true }), 'bet');
+  // Без 3-бета (просто уравнял) — как раньше, чек.
+  assert.equal(goFlop('Ah Qd', 'Kc 7s 2d', { action: 'raise', hero: BB, raiser: BTN }), 'check');
+});
+
+test('уравнял и ходишь первым: на низкой связанной доске ставишь с сильной рукой, на сухой высокой — чек', () => {
+  assert.equal(goFlop('7h 7d', '6s 5s 4d', { action: 'raise', hero: BB, raiser: BTN }), 'bet');
+  assert.equal(goFlop('Qc Qd', 'Kc 7s 2d', { action: 'raise', hero: BB, raiser: BTN }), 'check'); // средняя рука
+});

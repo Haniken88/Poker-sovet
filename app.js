@@ -652,6 +652,8 @@ function renderTicket() {
       advice = postflopAdvice({ hero, board, opponents: state.opponents, pot: state.pot,
         toCall: state.toCall, preflopAction: state.preflop, stack: stackOrInf(), style: state.style, iterations: 6000,
         preflop: { action: state.preflop, hero: heroPos, raiser: raiserPos(), heroOpened: state.preflop === '3bet' && state.raiser === state.hero,
+          // До тебя повысили, а ты по совету повысил снова (3-бет) — после флопа агрессор ты.
+          hero3bet: state.preflop === 'raise' && Boolean(state.preMove) && ['raise', 'allin'].includes(state.preMove.action),
           reraiser: state.reraiser ? seatPosition(state.occupied, state.button, state.reraiser) : null } });
       equity = advice.equity;
       const diff = Math.abs(advice.randomEquity - advice.equity) >= 0.05;

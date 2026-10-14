@@ -179,8 +179,10 @@ export function postflopAdvice({
   };
 
   // Кто был агрессором до флопа (по данным солвера от этого зависит, ставить первым или чекать).
-  const heroAggressor = Boolean(preflop && preflop.action === 'none' && preflop.hero && preflop.hero.key !== 'BB');
-  const heroCaller = Boolean(preflop && ((preflop.action === 'raise' && preflop.raiser) || (preflop.action === '3bet' && preflop.heroOpened)));
+  // 2026-10-14: hero3bet — до тебя повысили, а ты сделал 3-бет: после флопа агрессор ты (раньше считался «уравнявшим»).
+  const hero3bet = Boolean(preflop && preflop.hero3bet && preflop.raiser);
+  const heroAggressor = Boolean(preflop && ((preflop.action === 'none' && preflop.hero && preflop.hero.key !== 'BB') || hero3bet));
+  const heroCaller = Boolean(preflop && !hero3bet && ((preflop.action === 'raise' && preflop.raiser) || (preflop.action === '3bet' && preflop.heroOpened)));
   const headsUp = opponents === 1;
 
   if (!bet) {
@@ -188,8 +190,8 @@ export function postflopAdvice({
     // баттон при 40 ББ, малый блайнд против ББ; ~50 тыс. решений, data-build/solver/bet-freq.mjs). Главное: важно, ходишь ли
     // ты первым или тебе прочекали (в позиции). Где солвер сам ставит примерно в половине случаев — совет «спорно».
     const order = (p) => (p.key === 'SB' ? 0 : p.key === 'BB' ? 1 : 10 - p.behind); // кто раньше ходит после флопа
-    const villain = heroCaller ? (preflop.action === '3bet' ? preflop.reraiser : preflop.raiser) : null;
-    const heroIP = heroCaller ? Boolean(villain && preflop.hero && order(preflop.hero) > order(villain))
+    const villain = heroCaller ? (preflop.action === '3bet' ? preflop.reraiser : preflop.raiser) : hero3bet ? preflop.raiser : null;
+    const heroIP = heroCaller || hero3bet ? Boolean(villain && preflop.hero && order(preflop.hero) > order(villain))
       : heroAggressor ? preflop.hero.key !== 'SB' : false;
     // ФЛОП (2026-10-14, 6 флопов TexasSolver с ПК владельца, data-build/solver/flop-freq.mjs): тут солвер играет иначе, чем на тёрне.
     if (board.length === 3 && headsUp && !(spr < 1.5 && topPairPlus)) {
@@ -201,6 +203,16 @@ export function postflopAdvice({
       }
       if (heroCaller && !heroIP) {
         // Уравнял и ходишь первым: ставка только с очень сильными (солвер 62–87 %), остальное — чек.
+        // На низких связанных и одномастных досках (они лучше «попадают» в руки уравнявшего) солвер ставит первым гораздо
+        // чаще (6♠5♠4♦ — 81 %, 9♥7♥3♥ — 77 %); источники (Pokerology) — небольшая ставка с сильной частью рук. Делаем осторожно:
+        // с 60 % и треть банка (2026-10-14).
+        const rs = board.map(rankOf), distinct = new Set(rs);
+        const lowConnected = Math.max(...rs) <= 9 && distinct.size === 3 && Math.max(...rs) - Math.min(...rs) <= 4;
+        const monotone = new Set(board.map(suitOf)).size === 1;
+        if ((lowConnected || monotone) && equity >= 0.6) {
+          close = equity < 0.75;
+          return result('bet', pot * 0.33, `Шанс ${percent} %. Доска ${monotone ? 'одномастная' : 'низкая и связанная'} — она лучше подходит к твоим рукам, чем к рукам повышавшего: ставь первым треть банка.`);
+        }
         if (equity >= 0.8) return result('bet', pot * 0.5, `Шанс ${percent} % — очень сильная рука: ставь полбанка сам, не жди.`);
         close = equity >= 0.3 && equity < 0.7;
         return result('check', 0, `Первым против того, кто повышал до флопа, обычно чек (шанс ${percent} %) — он почти всегда поставит сам.`);
