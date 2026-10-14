@@ -1,0 +1,30 @@
+set_pot 55
+set_effective_stack 975
+set_board Ac,9d,4h
+set_range_ip 22:0.78,33,44,55,66,77,88,99,AA,KK,QQ,JJ,TT,AKs,AKo,AQs,AQo,AJs,AJo,ATs,ATo,A9s,A9o,A8s,A8o,A7s,A7o,A6s,A6o,A5s,A5o,A4s,A4o,A3s,A3o:0.67,A2s,A2o:0.12,KQs,KQo,KJs,KJo,KTs,KTo,K9s,K9o,K8s,K8o:0.69,K7s,K7o:0.14,K6s,K5s,K4s,K3s,K2s,QJs,QJo,QTs,QTo,Q9s,Q9o:0.67,Q8s,Q8o:0.10,Q7s,Q6s,Q5s,Q4s:0.67,Q3s:0.67,Q2s:0.02,JTs,JTo,J9s,J9o:0.67,J8s,J8o:0.16,J7s,J6s:0.67,J5s:0.67,J4s:0.09,T9s,T9o:0.67,T8s,T8o:0.34,T7s,T6s:0.67,98s,98o:0.16,97s,96s:0.45,87s,86s:0.92,85s:0.03,76s:0.97,75s:0.50,65s:0.60,54s:0.64
+set_range_oop 22,33,44:0.94,55:0.66,66:0.57,77:0.51,88:0.42,99:0.08,AQo:0.06,AJs:0.29,AJo:0.29,ATs:0.38,ATo:0.47,A9s:0.61,A9o:0.72,A8s:0.51,A8o:0.87,A7s:0.47,A7o:0.70,A6s:0.81,A6o:0.48,A5s:0.24,A5o:0.53,A4s:0.64,A4o:0.49,A3s:0.94,A3o:0.33,A2s:0.85,A2o:0.33,KQs:0.17,KQo:0.32,KJs:0.30,KJo:0.79,KTs:0.60,KTo:0.76,K9s:0.71,K9o:0.69,K8s:0.85,K8o:0.48,K7s:0.83,K7o:0.33,K6s:0.78,K6o:0.33,K5s:0.78,K5o:0.33,K4s:0.83,K4o:0.33,K3s:0.88,K3o:0.33,K2s:0.94,K2o:0.33,QJs:0.59,QJo:0.85,QTs:0.54,QTo:0.80,Q9s:0.61,Q9o:0.69,Q8s:0.78,Q8o:0.33,Q7s:0.89,Q7o:0.33,Q6s:0.83,Q6o:0.33,Q5s:0.82,Q5o:0.33,Q4s:0.85,Q4o:0.33,Q3s:0.67,Q3o:0.33,Q2s:0.67,JTs:0.43,JTo:0.82,J9s:0.57,J9o:0.67,J8s:0.69,J8o:0.35,J7s:0.68,J7o:0.33,J6s:0.61,J5s:0.60,J4s:0.67,J3s:0.67,J2s:0.59,T9s:0.38,T9o:0.74,T8s:0.63,T8o:0.47,T7s:0.75,T7o:0.33,T6s:0.59,T6o:0.33,T5s:0.54,T4s:0.42,T3s:0.41,T2s:0.33,98s:0.67,98o:0.46,97s:0.86,97o:0.33,96s:0.82,96o:0.33,95s:0.41,94s:0.33,93s:0.33,92s:0.33,87s:0.69,87o:0.46,86s:0.86,86o:0.33,85s:0.67,84s:0.38,83s:0.33,82s:0.33,76s:0.73,76o:0.41,75s:0.82,75o:0.33,74s:0.67,73s:0.34,72s:0.33,65s:0.74,65o:0.33,64s:0.91,64o:0.33,63s:0.67,62s:0.33,54s:0.72,54o:0.33,53s:0.94,53o:0.33,52s:0.67,43s:0.84,43o:0.33,42s:0.60,32s:0.43
+set_bet_sizes oop,flop,bet,50
+set_bet_sizes oop,flop,allin
+set_bet_sizes ip,flop,bet,50
+set_bet_sizes ip,flop,allin
+set_bet_sizes oop,turn,bet,33,75
+set_bet_sizes oop,turn,raise,100
+set_bet_sizes oop,turn,allin
+set_bet_sizes ip,turn,bet,33,75
+set_bet_sizes ip,turn,raise,100
+set_bet_sizes ip,turn,allin
+set_bet_sizes oop,river,bet,75
+set_bet_sizes oop,river,allin
+set_bet_sizes ip,river,bet,75
+set_bet_sizes ip,river,raise,100
+set_bet_sizes ip,river,allin
+set_allin_threshold 0.67
+build_tree
+set_thread_num 4
+set_accuracy 1
+set_max_iteration 150
+set_print_interval 25
+set_use_isomorphism 1
+start_solve
+set_dump_rounds 1
+dump_result results/BTN_100_Ac9d4h.json
