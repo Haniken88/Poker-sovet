@@ -1,0 +1,30 @@
+set_pot 215
+set_effective_stack 900
+set_board Qh,9s,4d
+set_range_ip 44:0.06,55:0.08,66:0.17,77:0.16,88:0.18,99:0.23,AA,KK,QQ,JJ:0.91,TT:0.52,AKs,AKo,AQs:0.50,AQo:0.74,AJs:0.24,AJo:0.88,ATs:0.16,ATo:0.65,A9s:0.22,A8s:0.49,A7s:0.60,A6s:0.33,A5s:0.23,A4s:0.74,A3s:0.87,A2s:0.48,A2o:0.11,KQs:0.34,KQo:0.86,KJs:0.37,KJo:0.50,KTs:0.30,KTo:0.14,K9s:0.12,K6s:0.22,K4s:0.31,K3s:0.33,K2s:0.33,QJs:0.17,QJo:0.11,QTs:0.11,Q9s:0.29,JTs:0.22,J9s:0.07,T9s:0.10,87s:0.04,76s:0.05,65s:0.06,54s:0.10
+set_range_oop 22:0.67,33:0.67,44:0.45,55:0.44,66:0.50,77:0.39,88:0.45,99:0.43,JJ:0.04,TT:0.11,AKo:0.21,AQs:0.67,AQo:0.29,AJs:0.65,AJo:0.19,ATs:0.53,ATo:0.18,A9s:0.39,A9o:0.33,A8s:0.19,A8o:0.33,A7s:0.33,A7o:0.33,A6s:0.33,A6o:0.29,A5s:0.32,A5o:0.30,A4s:0.41,A4o:0.27,A3s:0.33,A3o:0.25,A2s:0.33,A2o:0.23,KQs:0.62,KQo:0.25,KJs:0.42,KJo:0.33,KTs:0.42,KTo:0.18,K9s:0.34,K9o:0.24,K8s:0.33,K8o:0.17,K7s:0.33,K7o:0.15,K6s:0.37,K6o:0.11,K5s:0.33,K5o:0.11,K4s:0.33,K4o:0.24,K3s:0.32,K3o:0.24,K2s:0.26,K2o:0.22,QJs:0.47,QJo:0.33,QTs:0.44,QTo:0.33,Q9s:0.33,Q9o:0.18,Q8s:0.33,Q8o:0.13,Q7s:0.32,Q7o:0.24,Q6s:0.28,Q6o:0.23,Q5s:0.32,Q5o:0.21,Q4s:0.32,Q4o:0.18,Q3s:0.32,Q3o:0.17,Q2s:0.32,Q2o:0.15,JTs:0.48,JTo:0.32,J9s:0.35,J9o:0.27,J8s:0.33,J8o:0.27,J7s:0.32,J7o:0.20,J6s:0.32,J6o:0.16,J5s:0.32,J5o:0.15,J4s:0.31,J3s:0.31,J2s:0.29,T9s:0.44,T9o:0.31,T8s:0.37,T8o:0.28,T7s:0.33,T7o:0.19,T6s:0.32,T5s:0.30,T4s:0.22,T3s:0.19,T2s:0.17,98s:0.40,98o:0.28,97s:0.34,97o:0.18,96s:0.32,95s:0.24,94s:0.12,93s:0.10,92s:0.08,92o:0.02,87s:0.41,87o:0.10,86s:0.64,86o:0.02,85s:0.27,84s:0.14,83s:0.04,83o:0.11,82s:0.04,82o:0.11,76s:0.52,76o:0.05,75s:0.30,74s:0.21,73s:0.05,73o:0.11,72s:0.03,72o:0.11,65s:0.63,65o:0.03,64s:0.27,63s:0.14,63o:0.11,62s:0.08,62o:0.11,54s:0.54,54o:0.02,53s:0.25,52s:0.15,52o:0.11,43s:0.25,42s:0.14,42o:0.11,32s:0.15,32o:0.11
+set_bet_sizes oop,flop,bet,50
+set_bet_sizes oop,flop,allin
+set_bet_sizes ip,flop,bet,50
+set_bet_sizes ip,flop,allin
+set_bet_sizes oop,turn,bet,33,75
+set_bet_sizes oop,turn,raise,100
+set_bet_sizes oop,turn,allin
+set_bet_sizes ip,turn,bet,33,75
+set_bet_sizes ip,turn,raise,100
+set_bet_sizes ip,turn,allin
+set_bet_sizes oop,river,bet,75
+set_bet_sizes oop,river,allin
+set_bet_sizes ip,river,bet,75
+set_bet_sizes ip,river,raise,100
+set_bet_sizes ip,river,allin
+set_allin_threshold 0.67
+build_tree
+set_thread_num 4
+set_accuracy 1
+set_max_iteration 150
+set_print_interval 25
+set_use_isomorphism 1
+start_solve
+set_dump_rounds 1
+dump_result results/3B_CO_vs_BTN_Qh9s4d.json
