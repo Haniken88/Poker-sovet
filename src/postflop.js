@@ -282,11 +282,14 @@ export function postflopAdvice({
   // При глубоких стеках (SPR > 6) одной парой банк не раздуваем.
   const deepOnePair = spr > 6 && !bigHand;
   const raiseNeed = heroAggressor ? 0.9 : 0.8; // по солверу рейзят только очень сильным
-  if (vsValue >= Math.max(valueNeed, raiseNeed) && price < stack && !deepOnePair) {
+  // Флоп один на один: солвер на ставку почти всегда просто уравнивает — даже сетом и при SPR около 3 в 3-бет банке
+  // (18 флопов TexasSolver, 2026-10-15: наши «рейз / ва-банк» там были колл у солвера). Повышаем только при SPR < 1,5.
+  const flopFlat = board.length === 3 && headsUp && preflop && spr >= 1.5;
+  if (vsValue >= Math.max(valueNeed, raiseNeed) && price < stack && !deepOnePair && !flopFlat) {
     return result('raise', bet * 3, `Ты впереди даже против рук, которыми так ставят без блефа (${percentText(vsValue)} %), — повышай втрое.`);
   }
   // Маленький SPR и старшая пара или сильнее: сдаваться поздно — ва-банк.
-  if (spr < 3 && topPairPlus && equity >= potOdds) {
+  if (spr < 3 && topPairPlus && equity >= potOdds && !flopFlat) {
     return result('allin', stack, `Стек меньше трёх банков (SPR ${sprText}), а у тебя ${handName.toLowerCase()} — с такой рукой при маленьком стеке идут ва-банк.`);
   }
 
