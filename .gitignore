@@ -10,3 +10,4 @@ PLAN.private.md
 data-build/nash/ring.json
 data-build/solver/pc-flops/poker/results/*.json
 data-build/solver/pc-flops/poker/logs/*.log
+screens/

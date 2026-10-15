@@ -172,7 +172,7 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
       // Все сбросили — таблица Нэша для полного стола (МБ без анте — опубликованная таблица один на один).
       if (action === 'none') {
         const push = position.behind === 1 && !(ante > 0) ? nashHU(stackBB).push : ringSet(ante > 0, position.behind, stackBB, 0);
-        const where = position.behind === 1 ? 'с малого блайнда против большого' : `с этого места (после тебя ${position.behind} игроков)`;
+        const where = position.behind === 1 ? 'с малого блайнда против большого' : `с этого места (после тебя ${position.behind} ${position.behind < 5 ? 'игрока' : 'игроков'})`;
         // Сильные руки при 10–15 ББ первым не пасуем: чистый Нэш с ранних мест режет их на самой границе, а PokerSkill
         // (15 ББ) и Preflop Wizard (20 ББ) с ними идут ва-банк (сверка 2026-10-12, scripts/audit.mjs).
         if (!push.has(cls) && stackBB >= 10 && PREMIUM.has(cls)) {

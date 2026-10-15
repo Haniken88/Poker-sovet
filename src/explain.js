@@ -63,7 +63,7 @@ function explainPush(q, iterations, random) {
   const alt = [];
   if (players > 2 && position.behind < 8 && pushSet(9, 8, S, ante).has(cls) !== pushNow) alt.push(`с первой позиции за полным столом (после тебя 8 игроков) — ${pushNow ? 'уже пас' : 'ва-банк'}`);
   if (position.behind > 2 && pushSet(players, 2, S, ante).has(cls) !== pushNow) alt.push(`с баттона (после тебя только блайнды) — ${pushNow ? 'пас' : 'ва-банк'}`);
-  const S2 = Math.min(players === 2 ? 20 : 15, S + 6);
+  const S2 = Math.min(players === 2 ? 20 : 15, Math.round(S) + 6);
   if (S2 !== S && pushSet(players, position.behind, S2, ante).has(cls) !== pushNow) alt.push(`при стеке ${S2} ББ на этом же месте — ${pushNow ? 'пас' : 'ва-банк'}`);
   if (pushSet(players, position.behind, S, !ante).has(cls) !== pushNow) alt.push(`${ante ? 'без анте' : 'с анте'} — ${pushNow ? 'пас' : 'ва-банк'}`);
   if (alt.length) lines.push(`Но это не правило «с ${cls} всегда ${pushNow ? 'ва-банк' : 'пас'}»: ${alt.join('; ')}.`);
