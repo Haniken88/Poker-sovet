@@ -282,9 +282,10 @@ export function postflopAdvice({
   // При глубоких стеках (SPR > 6) одной парой банк не раздуваем.
   const deepOnePair = spr > 6 && !bigHand;
   const raiseNeed = heroAggressor ? 0.9 : 0.8; // по солверу рейзят только очень сильным
-  // Флоп один на один: солвер на ставку почти всегда просто уравнивает — даже сетом и при SPR около 3 в 3-бет банке
-  // (18 флопов TexasSolver, 2026-10-15: наши «рейз / ва-банк» там были колл у солвера). Повышаем только при SPR < 1,5.
-  const flopFlat = board.length === 3 && headsUp && preflop && spr >= 1.5;
+  // Флоп один на один при SPR 1,5–4 (3-бет банк): любое повышение там — по сути весь стек, а солвер, имея ва-банк,
+  // уравнивает даже сетом (18 флопов TexasSolver, 2026-10-15). При глубоких стеках не трогаем: обычного рейза на флопе
+  // в наших расчётах не было (дерево: ставка 50 % и ва-банк) — проверить нечем.
+  const flopFlat = board.length === 3 && headsUp && preflop && spr >= 1.5 && spr < 4;
   if (vsValue >= Math.max(valueNeed, raiseNeed) && price < stack && !deepOnePair && !flopFlat) {
     return result('raise', bet * 3, `Ты впереди даже против рук, которыми так ставят без блефа (${percentText(vsValue)} %), — повышай втрое.`);
   }
