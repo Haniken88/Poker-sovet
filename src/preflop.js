@@ -13,7 +13,7 @@ import { allClasses } from './hands.js';
 // Полный стол, до 25 ББ (src/nashRing.js): ва-банк и колл против ва-банка по Нэшу.
 const CLASSES = allClasses();
 const ringCache = new Map();
-function ringSet(ante, behind, stackBB, which) {
+export function ringSet(ante, behind, stackBB, which) {
   const m = String(Math.min(8, Math.max(1, behind)));
   const S = String(Math.min(25, Math.max(1, Math.round(stackBB))));
   const id = `${ante ? 1 : 0}:${m}:${S}:${which}`;

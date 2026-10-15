@@ -1,6 +1,7 @@
 // Экран «Тренажёр» (2026-10-13): тот же стол, что на главном экране; вопросы — src/trainer.js.
 import { nextQuestion, TOPICS, SERIES, FREE_PER_DAY } from './src/trainer.js';
 import { openSizeFor } from './src/preflop.js';
+import { explainQuestion } from './src/explain.js';
 import { GEOMETRY, DEALER_XY, SEAT_XY, activeSeats } from './src/table.js';
 import { rankOf, suitOf } from './src/cards.js';
 
@@ -17,7 +18,7 @@ const rnd = Math.random;
 const lowerFirst = (t) => t[0].toLowerCase() + t.slice(1);
 
 let opts = null; // { isPro, openPro, onExit }
-let topic = 'short';
+let topic = 'mix';
 let run = null; // { n, right, answered, q, results: [], repeat: [] }
 
 // Сколько вопросов задано сегодня (для бесплатной версии — 10 в день).
@@ -84,24 +85,37 @@ function seating(q) {
   return q.seats;
 }
 
-const ACT_TEXT = (a) => (a === 'fold' ? 'пас' : a === 'allin' ? 'ва-банк' : `рейз ${ru(a.raise)} ББ`);
+const ACT_TEXT = (a) => (a === 'fold' ? 'пас' : a === 'allin' ? 'ва-банк' : a.open ? `рейз ${ru(a.open)} ББ`
+  : a.threebet ? `3-бет до ${ru(a.threebet)} ББ` : `рейз ${ru(a.raise)} ББ`);
 function answerLabel(a, q) {
   if (a === 'fold') return 'Пас';
   if (a === 'allin') return 'Ва-банк';
-  if (a === 'call') return q.topic === 'vsShove' ? 'Колл' : q.raiseTo ? `Колл ${ru(q.raiseTo)} ББ` : 'Колл 1 ББ';
+  if (a === 'call') return q.topic === 'vsShove' ? 'Колл' : q.topic === 'vs3bet' ? `Колл до ${ru(q.raiseTo)} ББ`
+    : q.raiseTo ? `Колл ${ru(q.raiseTo)} ББ` : 'Колл 1 ББ';
+  if (q.topic === 'vs3bet') return `4-бет до ${ru(q.threeBetTo)} ББ`;
   return q.raiseTo ? `3-бет до ${ru(q.threeBetTo)} ББ` : `Рейз ${ru(openSizeFor(q.stackBB, q.players === 2))} ББ`;
 }
 
 function situation(q) {
   const p = q.position;
   const opener = Object.entries(q.seatsActs).find(([, a]) => a !== 'fold');
-  const before = !opener ? 'до тебя все сбросили'
+  const before = q.topic === 'vs3bet' ? `ты повысил до ${ru(q.heroOpen)} ББ, ${posName(q.threeBettor)} сделал 3-бет до ${ru(q.raiseTo)} ББ, остальные сбросили`
+    : !opener ? 'до тебя все сбросили'
     : q.topic === 'vsShove' ? `${posName(q.opener)} пошёл ва-банк, остальные сбросили`
     : `${posName(q.opener)} повысил до ${ru(q.raiseTo)} ББ, остальные сбросили`;
   // Сколько ходит после тебя до флопа. Вдвоём после баттона — только ББ (в positions.js behind=2 — условность для таблиц).
-  const left = q.players === 2 ? (p.key === 'BB' ? 0 : 1) : p.behind;
+  const left = q.topic === 'vs3bet' ? 0 : q.players === 2 ? (p.key === 'BB' ? 0 : 1) : p.behind;
   const after = left === 1 ? ' После тебя ходит ещё один игрок.' : left > 1 ? ` После тебя ходят ещё ${left}.` : ' После тебя никто не ходит.';
   return `Ты — <b>${posName(p)}</b>, ${q.players} за столом, стек <b>${q.stackBB} ББ</b>${q.ante ? ', анте' : ''}. ${before[0].toUpperCase() + before.slice(1)}.${after}`;
+}
+
+// Сколько в банке перед твоим ходом: блайнды + анте + ставки (блайнд того, кто повысил, уже внутри его ставки).
+const postedBy = (p) => (!p ? 0 : p.key === 'BB' ? 1 : p.key === 'SB' ? 0.5 : 0);
+function potNow(q) {
+  const base = 1.5 + q.ante;
+  if (q.topic === 'vs3bet') return base + q.heroOpen + q.raiseTo - postedBy(q.position) - postedBy(q.threeBettor);
+  if (q.topic === 'vsShove' || q.topic === 'vsRaise') return base + (q.topic === 'vsShove' ? q.stackBB : q.raiseTo) - postedBy(q.opener);
+  return base;
 }
 
 function render() {
@@ -115,13 +129,13 @@ function render() {
     const off = (active.indexOf(n) - active.indexOf(seatOf(0)) + active.length) % active.length;
     const key = (q.players === 2 ? (off === 0 ? 'BTN' : 'BB') : null) || positionKey(q.players, off);
     const act = q.seatsActs[off];
-    const cls = act === undefined ? '' : act === 'fold' ? 'fold' : 'raise';
+    const cls = act === undefined ? '' : act === 'fold' ? 'fold' : act.open ? 'open' : 'raise';
     // Подпись у мест у края стола прижимаем внутрь, чтобы не вылезала за экран.
     const x = SEAT_XY[n][0] / GEOMETRY.W, edge = x > 0.8 ? ' edge-r' : x < 0.2 ? ' edge-l' : '';
     return `<div class="seat${n === heroSeat ? ' is-hero' : ''}" style="${pct(SEAT_XY[n])}"><b>${n}</b><span>${SHORT[key] || key}</span>${act !== undefined ? `<em class="seat-act ${cls}${edge}">${ACT_TEXT(act)}</em>` : ''}</div>`;
   }).join('');
   $('tr-seats').innerHTML = `<div class="croupier" style="${pct(DEALER_XY)}">Дилер</div>${seatHtml}<div class="button-chip" style="${pct(chipPoint(seatOf(0)))}">D</div>`;
-  $('tr-center').innerHTML = `<span class="tr-pot">В банке ${ru(1.5 + q.ante + (q.topic === 'vsShove' ? q.stackBB : q.topic === 'vsRaise' ? q.raiseTo : 0))} ББ</span>`;
+  $('tr-center').innerHTML = `<span class="tr-pot">В банке ${ru(potNow(q))} ББ</span>`;
 
   $('tr-topics').innerHTML = TOPICS.map(([k, t]) => `<button data-topic="${k}" aria-pressed="${k === topic}">${t}</button>`).join('');
   for (const b of $('tr-topics').querySelectorAll('button')) b.onclick = () => { topic = b.dataset.topic; newSeries(); };
@@ -171,9 +185,18 @@ function renderTicket() {
   const last = run.results.length >= SERIES;
   t.innerHTML = `<div class="tr-verdict ${ok ? 'ok' : 'no'}">${ok ? 'Верно' : 'Неверно'} — ${ok ? '' : 'правильно: '}${lowerFirst(answerLabel(q.correct, q))}</div>
     <p class="tr-why">${q.advice.reason}</p>
+    <div id="tr-more">${q.explain ? explainHtml(q.explain) : '<button class="tr-more" id="tr-more-btn">Полное объяснение</button>'}</div>
     <button class="tr-next" id="tr-next">${last ? 'Итог серии' : 'Дальше'}</button>`;
   $('tr-next').onclick = last ? summary : next;
+  const more = $('tr-more-btn');
+  if (more) more.onclick = () => {
+    more.disabled = true; more.textContent = 'Считаю…';
+    // Расчёт шансов занимает долю секунды — даём кнопке перерисоваться.
+    setTimeout(() => { q.explain = explainQuestion(q); $('tr-more').innerHTML = explainHtml(q.explain); }, 30);
+  };
 }
+
+const explainHtml = (lines) => `<div class="tr-explain"><h3>Почему так</h3>${lines.map((l) => `<p>${l}</p>`).join('')}</div>`;
 
 function summary() {
   const wrong = run.results.filter((r) => !r.ok);

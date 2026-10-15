@@ -1,16 +1,18 @@
 // Тренажёр «Что делаешь?» (2026-10-13): придумывает раздачу до флопа, правильный ответ — совет приложения
 // (те же проверенные таблицы: Нэш, солверы). Спорные места («почти равно») в вопросы не берём.
-import { preflopAdvice } from './preflop.js';
+import { preflopAdvice, openSizeFor } from './preflop.js';
 import { positionInfo } from './positions.js';
 import { handClass } from './hands.js';
 import { HAND_RANKS } from './handRanks.js';
 
+// Порядок — просьба владельца 2026-10-15: «Всё подряд» первым (по умолчанию), «Короткий стек» — в конце.
 export const TOPICS = [
-  ['short', 'Короткий стек'],
-  ['vsShove', 'Против ва-банка'],
+  ['mix', 'Всё подряд'],
   ['open', 'Открытие'],
   ['vsRaise', 'Против повышения'],
-  ['mix', 'Всё подряд'],
+  ['vs3bet', 'Тебе сделали 3-бет'],
+  ['vsShove', 'Против ва-банка'],
+  ['short', 'Короткий стек'],
 ];
 export const SERIES = 20;
 export const FREE_PER_DAY = 10;
@@ -41,16 +43,26 @@ function answerOf(advice, facingAllIn) {
  * Возвращает { topic, players, offset, stackBB, ante, hero, seatsActs, ctx, options, correct, advice } или null (переиграть).
  */
 export function makeQuestion(topic, rnd) {
-  const kind = topic === 'mix' ? pick(rnd, ['short', 'vsShove', 'open', 'vsRaise']) : topic;
+  const kind = topic === 'mix' ? pick(rnd, ['short', 'vsShove', 'open', 'vsRaise', 'vsRaise', 'vs3bet']) : topic;
   const players = kind === 'short' || kind === 'vsShove' ? pick(rnd, [2, 3, 6, 6, 9, 9, 9]) : pick(rnd, [6, 9, 9]);
   const ante = rnd() < 0.5 ? 1 : 0;
   const stackBB = kind === 'short' ? int(rnd, 4, 20) : kind === 'vsShove' ? int(rnd, 4, 15)
-    : kind === 'open' ? pick(rnd, [25, 30, 40, 60, 100]) : pick(rnd, [20, 25, 40, 60, 100]);
+    : kind === 'open' ? pick(rnd, [25, 30, 40, 60, 100]) : kind === 'vs3bet' ? pick(rnd, [40, 60, 100, 100])
+    : pick(rnd, [20, 25, 40, 60, 100]);
   // Порядок хода до флопа: смещения от баттона 3…N−1 (ранние), 0 (баттон), 1 (МБ), 2 (ББ); вдвоём — 0, 1.
   const order = players === 2 ? [0, 1] : [...Array.from({ length: players - 3 }, (_, i) => i + 3), 0, 1, 2];
-  let heroIdx, openerIdx = -1;
+  let heroIdx, openerIdx = -1, tbIdx = -1;
   if (kind === 'short' || kind === 'open') {
     heroIdx = int(rnd, 0, order.length - 2); // не ББ: все сбросили — ББ просто чекает
+  } else if (kind === 'vs3bet') {
+    // Ты открыл первым, кто-то после тебя сделал 3-бет (таблицы солверов «открывший против 3-бета»).
+    if (players === 2) return null;
+    heroIdx = int(rnd, 0, order.length - 2);
+    tbIdx = int(rnd, heroIdx + 1, order.length - 1);
+  } else if (kind === 'vsRaise' && rnd() < 0.4) {
+    // Защита большого блайнда — самая частая ситуация «против повышения» в жизни.
+    heroIdx = order.length - 1;
+    openerIdx = int(rnd, 0, order.length - 2);
   } else {
     if (order.length < 2) return null;
     openerIdx = int(rnd, 0, order.length - 2);
@@ -64,7 +76,15 @@ export function makeQuestion(topic, rnd) {
   let action = 'none', raiseTo = 0, opener = null;
   if (kind === 'vsShove') { action = 'raise'; raiseTo = stack; opener = positionInfo(players, order[openerIdx]); }
   if (kind === 'vsRaise') { action = 'raise'; raiseTo = pick(rnd, [2, 2.5, 3]); opener = positionInfo(players, order[openerIdx]); }
-  const advice = preflopAdvice({ hero, position, action, raiseTo, bigBlind: bb, stack, opener, ante });
+  let heroOpen = 0, threeBettor = null;
+  if (kind === 'vs3bet') {
+    threeBettor = positionInfo(players, order[tbIdx]);
+    heroOpen = openSizeFor(stackBB, false);
+    raiseTo = (threeBettor.group === 'blinds' ? 4 : 3) * heroOpen; // 3-бет: из блайндов ×4, в позиции ×3
+    action = '3bet';
+  }
+  const advice = preflopAdvice({ hero, position, action, raiseTo, bigBlind: bb, stack, opener, ante,
+    heroOpened: kind === 'vs3bet', threeBettor });
   if (advice.close) return null; // спорно — не спрашиваем
   const facingAllIn = kind === 'vsShove';
   const correct = answerOf(advice, facingAllIn);
@@ -72,6 +92,13 @@ export function makeQuestion(topic, rnd) {
   // Что сделал каждый до тебя (по смещению от баттона).
   const seatsActs = {};
   order.forEach((off, i) => {
+    if (kind === 'vs3bet') {
+      // Все, кроме тебя и сделавшего 3-бет, уже сбросили; у тебя — твоё открытие.
+      if (i === heroIdx) seatsActs[off] = { open: heroOpen };
+      else if (i === tbIdx) seatsActs[off] = { threebet: raiseTo };
+      else seatsActs[off] = 'fold';
+      return;
+    }
     if (i >= heroIdx) return;
     if (i === openerIdx) seatsActs[off] = kind === 'vsShove' ? 'allin' : { raise: raiseTo };
     else seatsActs[off] = 'fold';
@@ -80,14 +107,14 @@ export function makeQuestion(topic, rnd) {
   // Всегда четыре варианта (просьба владельца 2026-10-13), кроме ответа на ва-банк: там повысить нельзя — пас или колл.
   const options = kind === 'vsShove' ? ['fold', 'call'] : ['fold', 'call', 'raise', 'allin'];
   // Размер повторного повышения (как в советах): с блайндов ×4, иначе ×3.
-  const threeBetTo = (position.group === 'blinds' ? 4 : 3) * raiseTo;
-  return { topic: kind, players, offset, stackBB, ante, hero, seatsActs, raiseTo, threeBetTo, position, opener,
+  const threeBetTo = kind === 'vs3bet' ? Math.round(2.3 * raiseTo * 10) / 10 : (position.group === 'blinds' ? 4 : 3) * raiseTo;
+  return { topic: kind, players, offset, stackBB, ante, hero, seatsActs, raiseTo, threeBetTo, position, opener, threeBettor, heroOpen,
     options, correct, advice };
 }
 
 /** Вопрос с несколькими попытками (спорные места переигрываются). */
 // Чтобы «пас» не угадывался вслепую: часть вопросов с ответом «пас» переигрываем (цель — около половины).
-const FOLD_SKIP = { short: 0, vsShove: 0.1, open: 0.35, vsRaise: 0.6, mix: 0.45 };
+const FOLD_SKIP = { short: 0, vsShove: 0.1, open: 0.35, vsRaise: 0.6, vs3bet: 0.75, mix: 0.5 };
 export function nextQuestion(topic, rnd) {
   for (let i = 0; i < 200; i++) {
     const q = makeQuestion(topic, rnd);

@@ -11,7 +11,7 @@ import { proStatus, checkCode, PRO_PRICE, SHORT_STACK_PRO_BB, TRIAL_DAYS, PRO_EN
 import { GEOMETRY, DEALER_XY, SEAT_XY, SEAT_COUNT, activeSeats, seatPosition, nextActive } from './src/table.js';
 
 // Номер версии — поднимать при каждом обновлении вместе с CACHE в sw.js.
-const APP_VERSION = 40;
+const APP_VERSION = 41;
 const $ = (id) => document.getElementById(id);
 const RANK_LABEL = { 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
 const rankLabel = (r) => RANK_LABEL[r] || String(r);

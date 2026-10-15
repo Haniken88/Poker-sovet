@@ -288,3 +288,12 @@ body.training main, body.training .stakes-row, body.training #ticket, body.train
 .tr-row { display: flex; gap: 8px; } .tr-row .tr-next { flex: 2; }
 .tr-exit { flex: 1; margin-top: 12px; padding: 13px; border-radius: 12px; background: transparent; border: 1px solid #c9bd9d; color: var(--ink); font: 700 14px Manrope; }
 @media (prefers-reduced-motion: reduce) { .tr-buttons button { transition: none; } }
+/* Твоё открытие в задании «Тебе сделали 3-бет» — золотом, чтобы отличалось от чужого повышения (красным). */
+.seat-act.open { background: var(--gold); color: var(--ink); }
+.tr-more { width: 100%; margin-top: 12px; padding: 11px; border-radius: 12px; background: transparent; border: 1px solid #c9bd9d;
+  color: var(--ink); font: 700 14px Manrope; }
+.tr-more:disabled { opacity: .6; }
+.tr-explain { margin-top: 12px; padding-top: 10px; border-top: 1px solid #ddd0ae; }
+.tr-explain h3 { font: 400 16px Prata; color: var(--ink); margin-bottom: 4px; }
+.tr-explain p { font-size: 13px; line-height: 1.5; color: #4a4030; margin-top: 6px; }
+.tr-explain b { color: var(--ink); }
