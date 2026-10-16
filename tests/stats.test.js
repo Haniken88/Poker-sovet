@@ -44,3 +44,19 @@ test('хранится не больше MAX_HANDS последних разда
   assert.equal(list.at(-1).t, 'new');
   assert.equal(list[0].t, 1);
 });
+
+test('кормильцы и вредители: только вошедшие раздачи, по сумме', async () => {
+  const { handLeaders } = await import('../src/stats.js');
+  const h = (hand, kind, amount, extra = {}) => handEntry({ time: day, posKey: 'CO', kind, amount, bb: 1000, hand, ...extra });
+  const list = [h('AKo', 'win', 8000), h('AKo', 'win', 4000), h('QQ', 'lose', 12000), h('72o', 'fold', 0), h('99', 'win', 3000), h('KTo', 'lose', 2000)];
+  const { feeders, pests } = handLeaders(list);
+  assert.deepEqual(feeders.map((x) => [x.hand, x.count, x.net]), [['AKo', 2, 12], ['99', 1, 3]]);
+  assert.deepEqual(pests.map((x) => [x.hand, x.net]), [['QQ', -12], ['KTo', -2]]);
+});
+
+test('по глубине стека: раздачи без стека (старые) не считаются', async () => {
+  const { byDepth } = await import('../src/stats.js');
+  const h = (stackBB, kind, amount) => handEntry({ time: day, posKey: 'BTN', kind, amount, bb: 1000, stackBB });
+  const rows = byDepth([h(9, 'win', 2500), h(15, 'lose', 1000), h(16, 'win', 1000), h(100, 'fold', 0), h(null, 'win', 5000)]);
+  assert.deepEqual(rows.map((r) => [r.id, r.hands, r.net]), [['short', 2, 1.5], ['mid', 1, 1], ['deep', 1, 0]]);
+});

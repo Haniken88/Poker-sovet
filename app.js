@@ -8,11 +8,11 @@ import { preflopPot, currentPot, streetMoney } from './src/pot.js';
 import { stepBB } from './src/blinds.js';
 import { openTrainer, closeTrainer } from './trainer-view.js';
 import { proStatus, checkCode, PRO_PRICE, SHORT_STACK_PRO_BB, TRIAL_DAYS, PRO_ENFORCED } from './src/pro.js';
-import { handEntry, addHand, summarize } from './src/stats.js';
+import { handEntry, addHand, summarize, handLeaders, byDepth } from './src/stats.js';
 import { GEOMETRY, DEALER_XY, SEAT_XY, SEAT_COUNT, activeSeats, seatPosition, nextActive } from './src/table.js';
 
 // Номер версии — поднимать при каждом обновлении вместе с CACHE в sw.js.
-const APP_VERSION = 47;
+const APP_VERSION = 48;
 const $ = (id) => document.getElementById(id);
 const RANK_LABEL = { 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
 const rankLabel = (r) => RANK_LABEL[r] || String(r);
@@ -828,6 +828,35 @@ function recordHand() {
 let statsPeriod = 'day';
 const signedBB = (n) => (n > 0 ? `+${String(n).replace('.', ',')}` : n < 0 ? `−${String(-n).replace('.', ',')}` : '0') + ' ББ';
 const handsWord = (n) => (n % 10 === 1 && n % 100 !== 11 ? 'раздача' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'раздачи' : 'раздач');
+// Рука в статистике — класс (AKo, 99, 76s): две карты без мастей + прозвище, если есть.
+const CLASS_RANK = { A: 14, K: 13, Q: 12, J: 11, T: 10 };
+const classRank = (ch) => CLASS_RANK[ch] || Number(ch);
+function handRowHtml({ hand, count, net }) {
+  const [a, b] = [classRank(hand[0]), classRank(hand[1])];
+  const kind = hand.length === 2 ? 'пара' : hand[2] === 's' ? 'одномастные' : 'разномастные';
+  const nick = nicknameFor(a, b);
+  return `<div class="stats-hand"><span class="mini-cards"><span class="card">${rankLabel(a)}</span><span class="card">${rankLabel(b)}</span></span>
+    <span class="stats-hand-name">${rankLabel(a)}${rankLabel(b)} <small>${kind}${nick ? ` · «${nick.split(' · ')[0]}»` : ''}</small></span>
+    <span class="stats-hand-res"><b class="${net > 0 ? 'plus' : 'minus'}">${signedBB(net)}</b>${count} ${count === 1 ? 'раз' : count % 10 >= 2 && count % 10 <= 4 && (count < 12 || count > 14) ? 'раза' : 'раз'}</span></div>`;
+}
+function leadersHtml({ feeders, pests }) {
+  if (!feeders.length && !pests.length) return '';
+  return `<h3 class="stats-h">Руки: кормильцы и вредители</h3>
+    <p class="stats-hint">Какие стартовые руки приносят тебе фишки, а какие уносят (раздачи, где ты вошёл в банк)</p>
+    ${feeders.length ? `<div class="stats-sect">Кормильцы</div>${feeders.map(handRowHtml).join('')}` : ''}
+    ${pests.length ? `<div class="stats-sect">Вредители</div>${pests.map(handRowHtml).join('')}` : ''}`;
+}
+function depthHtml(rows) {
+  if (!rows.some((r) => r.hands)) return '';
+  const cls = (n) => (n > 0 ? 'plus' : n < 0 ? 'minus' : '');
+  return `<h3 class="stats-h">По глубине стека</h3>
+    <p class="stats-hint">Как идут дела на коротком, среднем и глубоком стеке (стек — до раздачи)</p>
+    <table class="stats-table">
+      <thead><tr><th>Стек</th><th>Раздач</th><th>Вошёл</th><th>Выиграл</th><th>Итог</th></tr></thead>
+      <tbody>${rows.map((r) => `<tr class="${r.hands ? '' : 'none'}"><td>${r.label}</td><td>${r.hands}</td><td>${r.entered}</td><td>${r.won}</td>
+        <td class="${cls(r.net)}">${r.hands ? signedBB(r.net) : '—'}</td></tr>`).join('')}</tbody>
+    </table>`;
+}
 function openStats() {
   if (!isPro()) return openPro();
   const { total, rows } = summarize(loadHands(), statsPeriod);
@@ -843,6 +872,8 @@ function openStats() {
         <tbody>${rows.map((r) => `<tr class="${r.hands ? '' : 'none'}"><td>${r.label}</td><td>${r.hands}</td><td>${r.entered}</td><td>${r.won}</td>
           <td class="${cls(r.net)}">${r.hands ? signedBB(r.net) : '—'}</td></tr>`).join('')}</tbody>
       </table>
+      ${leadersHtml(handLeaders(loadHands(), statsPeriod))}
+      ${depthHtml(byDepth(loadHands(), statsPeriod))}
       <p class="note">«Вошёл» — сам положил фишки сверх блайнда: уравнял или повысил. «Выиграл» — из этих раздач.
         Итог — в больших блайндах, чтобы разные уровни можно было сложить. Считаются раздачи, где ты отметил, чем они кончились.</p>`;
   openSheet(`

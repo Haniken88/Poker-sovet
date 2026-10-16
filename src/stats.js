@@ -55,3 +55,33 @@ export function summarize(list, period = 'all', now = new Date()) {
   const round = (s) => ({ ...s, net: Math.round(s.net * 10) / 10 });
   return { total: round(total), rows: ROWS.map(([id, label]) => ({ id, label, ...round(rows[id]) })) };
 }
+
+// Кормильцы и вредители: какие стартовые руки (класс вроде AKo, 99, 76s) приносят фишки, а какие уносят.
+// Берём только руки, где ты вошёл в банк: сброшенные без вложений ничего не значат. Не больше `top` с каждой стороны.
+export function handLeaders(list, period = 'all', now = new Date(), top = 3) {
+  const from = periodStart(period, now);
+  const by = new Map();
+  for (const h of list) {
+    if (h.t < from || !h.h || !h.e) continue;
+    const s = by.get(h.h) || { hand: h.h, count: 0, net: 0 };
+    s.count++; s.net += h.b; by.set(h.h, s);
+  }
+  const all = [...by.values()].map((s) => ({ ...s, net: Math.round(s.net * 10) / 10 }));
+  return {
+    feeders: all.filter((s) => s.net > 0).sort((a, b) => b.net - a.net).slice(0, top),
+    pests: all.filter((s) => s.net < 0).sort((a, b) => a.net - b.net).slice(0, top),
+  };
+}
+
+// По глубине стека (как в макете pro-stats): до 15 ББ — «ва-банк или пас», 16–40 — средний, больше 40 — глубокий.
+export const DEPTHS = [['short', 'До 15 ББ', 0, 15], ['mid', '16–40 ББ', 16, 40], ['deep', 'Больше 40 ББ', 41, Infinity]];
+export function byDepth(list, period = 'all', now = new Date()) {
+  const from = periodStart(period, now);
+  const rows = DEPTHS.map(([id, label, lo, hi]) => ({ id, label, lo, hi, hands: 0, entered: 0, won: 0, net: 0 }));
+  for (const h of list) {
+    if (h.t < from || !h.s) continue;
+    const r = rows.find((x) => h.s >= x.lo && h.s <= x.hi);
+    r.hands++; if (h.e) { r.entered++; if (h.r === 'win') r.won++; } r.net += h.b;
+  }
+  return rows.map(({ lo, hi, ...r }) => ({ ...r, net: Math.round(r.net * 10) / 10 }));
+}
