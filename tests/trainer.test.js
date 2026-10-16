@@ -13,7 +13,7 @@ test('правильный ответ всегда совпадает с сов�
     assert.ok(q.options.includes(q.correct), `${topic}: нет кнопки ${q.correct}`);
     assert.equal(q.options.length, q.topic === 'vsShove' ? 2 : 4);
     assert.ok(!q.advice.close, 'спорное место попало в вопросы');
-    const again = preflopAdvice({ hero: q.hero, position: q.position, action: q.topic === 'short' || q.topic === 'open' ? 'none' : q.topic === 'vs3bet' ? '3bet' : 'raise',
+    const again = preflopAdvice({ hero: q.hero, position: q.position, action: q.topic === 'short' || q.topic === 'open' ? 'none' : q.topic === 'vs3bet' ? '3bet' : q.topic === 'vsLimp' ? 'limp' : 'raise', limpers: q.limpers,
       raiseTo: q.topic === 'vsShove' ? q.stackBB : q.raiseTo, bigBlind: 1, stack: q.stackBB, opener: q.opener, ante: q.ante,
       heroOpened: q.topic === 'vs3bet', threeBettor: q.threeBettor });
     assert.equal(again.action, q.advice.action);
@@ -31,7 +31,8 @@ test('до тебя действуют только те, кто ходит ра
       assert.ok(q.raiseTo > q.heroOpen && q.threeBetTo > q.raiseTo);
       continue;
     }
-    assert.ok(acts.filter((a) => a !== 'fold').length <= 1);
+    assert.ok(acts.filter((a) => a !== 'fold' && a !== 'limp').length <= 1);
+    if (q.topic === 'vsLimp') assert.equal(acts.filter((a) => a === 'limp').length, q.limpers);
     assert.equal(q.seatsActs[q.offset], undefined, 'у тебя самого не может быть действия');
   }
 });

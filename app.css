@@ -312,3 +312,4 @@ body.training main, body.training .stakes-row, body.training #ticket, body.train
 .stats-table th:last-child, .stats-table td:last-child { padding-right: 14px; }
 .stats-table tr.none td { color: var(--muted); opacity: .6; }
 .plus { color: #7fd6a2; font-weight: 700; } .minus { color: #ff8a8f; font-weight: 700; }
+.seat-act.limp { background: rgba(216,178,90,.22); color: var(--gold); }

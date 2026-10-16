@@ -85,14 +85,16 @@ function seating(q) {
   return q.seats;
 }
 
-const ACT_TEXT = (a) => (a === 'fold' ? 'пас' : a === 'allin' ? 'ва-банк' : a.open ? `рейз ${ru(a.open)} ББ`
+const ACT_TEXT = (a) => (a === 'fold' ? 'пас' : a === 'allin' ? 'ва-банк' : a === 'limp' ? 'лимп 1 ББ' : a.open ? `рейз ${ru(a.open)} ББ`
   : a.threebet ? `3-бет до ${ru(a.threebet)} ББ` : `рейз ${ru(a.raise)} ББ`);
 function answerLabel(a, q) {
   if (a === 'fold') return 'Пас';
   if (a === 'allin') return 'Ва-банк';
+  if (a === 'call' && q.topic === 'vsLimp') return q.position.key === 'BB' ? 'Чек' : q.position.key === 'SB' ? 'Доплатить 0,5 ББ' : 'Колл 1 ББ';
   if (a === 'call') return q.topic === 'vsShove' ? 'Колл' : q.topic === 'vs3bet' ? `Колл до ${ru(q.raiseTo)} ББ`
     : q.raiseTo ? `Колл ${ru(q.raiseTo)} ББ` : 'Колл 1 ББ';
   if (q.topic === 'vs3bet') return `4-бет до ${ru(q.threeBetTo)} ББ`;
+  if (q.topic === 'vsLimp') return `Рейз до ${ru(q.threeBetTo)} ББ`;
   return q.raiseTo ? `3-бет до ${ru(q.threeBetTo)} ББ` : `Рейз ${ru(openSizeFor(q.stackBB, q.players === 2))} ББ`;
 }
 
@@ -100,6 +102,7 @@ function situation(q) {
   const p = q.position;
   const opener = Object.entries(q.seatsActs).find(([, a]) => a !== 'fold');
   const before = q.topic === 'vs3bet' ? `ты повысил до ${ru(q.heroOpen)} ББ, ${posName(q.threeBettor)} сделал 3-бет до ${ru(q.raiseTo)} ББ, остальные сбросили`
+    : q.topic === 'vsLimp' ? (q.limpers > 1 ? `${q.limpers} игрока уравняли 1 ББ (лимп), остальные сбросили` : `один игрок уравнял 1 ББ (лимп), остальные сбросили`)
     : !opener ? 'до тебя все сбросили'
     : q.topic === 'vsShove' ? `${posName(q.opener)} пошёл ва-банк, остальные сбросили`
     : `${posName(q.opener)} повысил до ${ru(q.raiseTo)} ББ, остальные сбросили`;
@@ -115,6 +118,7 @@ function potNow(q) {
   const base = 1.5 + q.ante;
   if (q.topic === 'vs3bet') return base + q.heroOpen + q.raiseTo - postedBy(q.position) - postedBy(q.threeBettor);
   if (q.topic === 'vsShove' || q.topic === 'vsRaise') return base + (q.topic === 'vsShove' ? q.stackBB : q.raiseTo) - postedBy(q.opener);
+  if (q.topic === 'vsLimp') return base + q.limpers;
   return base;
 }
 
@@ -129,7 +133,7 @@ function render() {
     const off = (active.indexOf(n) - active.indexOf(seatOf(0)) + active.length) % active.length;
     const key = (q.players === 2 ? (off === 0 ? 'BTN' : 'BB') : null) || positionKey(q.players, off);
     const act = q.seatsActs[off];
-    const cls = act === undefined ? '' : act === 'fold' ? 'fold' : act.open ? 'open' : 'raise';
+    const cls = act === undefined ? '' : act === 'fold' ? 'fold' : act === 'limp' ? 'limp' : act.open ? 'open' : 'raise';
     // Подпись у мест у края стола прижимаем внутрь, чтобы не вылезала за экран.
     const x = SEAT_XY[n][0] / GEOMETRY.W, edge = x > 0.8 ? ' edge-r' : x < 0.2 ? ' edge-l' : '';
     return `<div class="seat${n === heroSeat ? ' is-hero' : ''}" style="${pct(SEAT_XY[n])}"><b>${n}</b><span>${SHORT[key] || key}</span>${act !== undefined ? `<em class="seat-act ${cls}${edge}">${ACT_TEXT(act)}</em>` : ''}</div>`;

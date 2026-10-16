@@ -12,7 +12,7 @@ import { handEntry, addHand, summarize } from './src/stats.js';
 import { GEOMETRY, DEALER_XY, SEAT_XY, SEAT_COUNT, activeSeats, seatPosition, nextActive } from './src/table.js';
 
 // Номер версии — поднимать при каждом обновлении вместе с CACHE в sw.js.
-const APP_VERSION = 45;
+const APP_VERSION = 46;
 const $ = (id) => document.getElementById(id);
 const RANK_LABEL = { 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
 const rankLabel = (r) => RANK_LABEL[r] || String(r);
@@ -884,7 +884,8 @@ function openPro() {
       <li><b>Анте</b> — советы и таблицы с анте, как в турнирах.</li>
       <li><b>Уровни турнира</b> — блайнды и анте меняются одной кнопкой «▲».</li>
       <li><b>Тренажёр</b> без ограничений (бесплатно — 10 вопросов в день).</li>
-      <li class="soon"><b>Статистика</b> турниров — скоро.</li>
+      <li><b>Моя статистика</b> — по местам за столом: сколько раздач, где вошёл, где выиграл, итог в ББ.</li>
+      <li class="soon"><b>Режим турнира</b> — скоро.</li>
     </ul>
     <p class="pro-status">${st.kind === 'open' ? 'Сейчас всё открыто бесплатно для всех — идёт проверка приложения.'
       : st.kind === 'bought' ? 'У тебя Pro навсегда.'

@@ -63,6 +63,16 @@ export const OPEN_RANGES = OPEN;
 
 // Против лимперов (кто-то уравнял блайнд без повышения).
 const LIMP_CALL = '22+, A2s+, KTs+, QTs+, JTs, T9s, 98s, 87s, 76s, 65s';
+// Изоляция лимпера (2026-10-16): руки, которые повышают ВСЕ найденные источники — списки Preflop Wizard (6-max, 100 ББ,
+// один лимпер) — самые узкие из источников (GrindLab, pokerpro.tools, GTO Wizard через PokerNews дают шире). Наш рейз вне
+// этих списков — «спорно»: источники расходятся (баттон — от 17 до 45 % рук).
+const ISO_SURE = {
+  BTN: '77+, A2s+, ATo+, KTs+, KQo, QTs+, JTs, T9s, 98s, 87s, 76s, 65s, KJo, QJo',
+  CO: '88+, A2s+, AJo+, KJs+, QTs+, JTs, T9s, 98s, KTo',
+  HJ: '99+, ATs+, AQo+, KJs+, QJs, JTs, T9s',
+  SB: '88+, ATs+, A5s-A2s, AJo+, KTs+, QJs, JTs, T9s',
+  BB: '99+, AQs+, AQo+, KQs',
+};
 
 // Против одного повышения.
 const THREEBET = 'QQ+, AKs, AKo';
@@ -312,31 +322,43 @@ export function preflopAdvice({ hero, position, action = 'none', limpers = 0, ra
   }
 
   if (action === 'limp') {
-    const raiseSize = (openSize() + limpers) * bb;
+    // Размер (2026-10-16): солвер GTO Wizard против одного лимпера при 50 и 100 ББ лучше всего повышает ~4,3 ББ, при 25 ББ —
+    // 3–3,5 ББ (PokerNews, 03.2026); Preflop Wizard и GrindLab — +1 ББ за каждого лимпера и крупнее без позиции (из блайндов).
+    const oop = position.group === 'blinds';
+    const raiseSize = ((stackBB >= 40 ? 3.5 : 2.5) + limpers + (oop ? 1 : 0)) * bb;
+    // С каждым лишним лимпером — на ступень уже (Preflop Wizard): баттон → как катофф → как хайджек.
+    const tiers = ['BTN', 'CO', 'HJ'];
+    const seat = isBB ? 'BB' : position.key === 'SB' ? 'SB'
+      : tiers[Math.min(2, Math.max(0, tiers.indexOf(position.key === 'BTN' || position.key === 'CO' ? position.key : 'HJ')) + limpers - 1)];
+    const sure = inRange(cls, ISO_SURE[seat]);
+    const unsure = sure ? '' : ' Источники тут расходятся: часть повышает с такой рукой, часть — нет.';
     // Повышаем, если рука входит в диапазон с запасом: каждый лимпер — как два лишних игрока после тебя.
     if (inRange(cls, openRange(position.behind + 2 * limpers + 1))) {
-      return result('raise', raiseSize, `${cls} — сильная рука, повышай и забирай инициативу у лимперов.`);
+      // Малый блайнд при 25 ББ и меньше: солвер только уравнивает или идёт ва-банк, без маленьких повышений (GTO Wizard).
+      if (position.key === 'SB' && stackBB <= 25) {
+        return { ...result('allin', stack, `Стек ${ru(stackBB)} ББ, малый блайнд против лимпа: солвер тут либо доплачивает, либо сразу ва-банк — с ${cls} ва-банк.${unsure}`), close: !sure };
+      }
+      return { ...result('raise', raiseSize, `${cls} — сильная рука, повышай и забирай инициативу у ${limpers > 1 ? 'лимперов' : 'лимпера'}.${unsure}`), close: !sure };
     }
     if (isBB) return result('check', 0, 'Можно посмотреть флоп бесплатно.');
-    // Малый блайнд доплачивает всего полблайнда при уже большом банке — входим шире.
+    // Малый блайнд доплачивает всего полблайнда при уже большом банке — входим шире (солвер GTO Wizard тоже часто доплачивает).
     if (position.key === 'SB' && topClasses(0.55).has(cls)) {
-      return result('call', bb, `Доплатить всего полблайнда, а в банке уже ${limpers + 2} блайнда — с ${cls} выгодно посмотреть флоп.`);
+      return result('call', bb, `Доплатить всего полблайнда, а в банке уже ${ru(limpers + 1.5 + (ante > 0 ? 1 : 0))} ББ — с ${cls} выгодно посмотреть флоп.`);
     }
-    // Поздняя позиция и всего один лимпер: эту руку ты бы и так открыл с этого места —
-    // за один блайнд и с позицией смотреть флоп выгодно (повысить тоже не ошибка).
-    // Против нескольких лимперов в позиции — ещё и две старшие карты (от десятки) разных мастей:
-    // стриты и сильные пары, а цена — один блайнд при большом банке.
+    // Уравнять за лимпером не с блайндов: Preflop Wizard считает это почти всегда ошибкой (повышай или пас), солвер GTO Wizard
+    // тут выбирает только из «повысить или пас» — поэтому такие коллы всегда «спорно».
     const broadway = hero.every((c) => rankOf(c) >= 10);
     if (late && limpers >= 2 && broadway && inRange(cls, openRange(position.behind))) {
-      return result('call', bb, `${limpers} ${limpers >= 5 ? 'лимперов' : 'лимпера'}, а ты в позиции: ${cls} — две старшие карты (стриты и сильные пары), а доплатить всего один блайнд при банке в ${limpers + 1.5} блайнда.`);
+      return { ...result('call', bb, `${limpers} ${limpers >= 5 ? 'лимперов' : 'лимпера'}, а ты в позиции: ${cls} — две старшие карты (стриты и сильные пары), а доплатить всего один блайнд при банке в ${ru(limpers + 1.5 + (ante > 0 ? 1 : 0))} ББ. Повысить тоже можно.`), close: true };
     }
     if (late && limpers === 1 && inRange(cls, openRange(position.behind))) {
       return { ...result('call', bb, `Один лимпер, а ты в позиции: с этого места ${cls} ты бы и так открыл. Доплатить один блайнд и посмотреть флоп выгодно, повысить до ${chips(raiseSize)} тоже можно.`), close: true };
     }
     if (inRange(cls, LIMP_CALL) && inRange(cls, openRange(position.behind)) && implied(bb) >= 20) {
-      return result('call', bb, `${cls} хорошо играет в многосторонних банках: дёшево, а попадёшь в сет или дро — выиграешь много.`);
+      return { ...result('call', bb, `${cls} хорошо играет в многосторонних банках: дёшево, а попадёшь в сет или дро — выиграешь много. Повысить или сбросить тоже не ошибка.`), close: true };
     }
-    return result('fold', 0, `${cls} не стоит денег даже против лимперов.`);
+    // Пас рукой, которую ты бы открыл первым, — тоже на границе (широкие источники с ней изолируют).
+    return { ...result('fold', 0, `${cls} не стоит денег даже против лимперов.`), close: inRange(cls, openRange(position.behind)) };
   }
 
   const raiseBB = raiseTo / bb;
