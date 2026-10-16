@@ -8,10 +8,11 @@ import { preflopPot, currentPot, streetMoney } from './src/pot.js';
 import { stepBB } from './src/blinds.js';
 import { openTrainer, closeTrainer } from './trainer-view.js';
 import { proStatus, checkCode, PRO_PRICE, SHORT_STACK_PRO_BB, TRIAL_DAYS, PRO_ENFORCED } from './src/pro.js';
+import { handEntry, addHand, summarize } from './src/stats.js';
 import { GEOMETRY, DEALER_XY, SEAT_XY, SEAT_COUNT, activeSeats, seatPosition, nextActive } from './src/table.js';
 
 // Номер версии — поднимать при каждом обновлении вместе с CACHE в sw.js.
-const APP_VERSION = 44;
+const APP_VERSION = 45;
 const $ = (id) => document.getElementById(id);
 const RANK_LABEL = { 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
 const rankLabel = (r) => RANK_LABEL[r] || String(r);
@@ -806,12 +807,51 @@ $('new-hand').onclick = () => {
     }
     sheet.querySelector('[data-act="skip"]').onclick = () => { closeSheet(); startNewHand(); };
     sheet.querySelector('[data-act="done"]').onclick = () => {
+      recordHand();
       state.stack = Math.max(0, state.stack + (state.resultKind === 'win' ? 1 : -1) * state.result);
       closeSheet(); startNewHand();
     };
   };
   draw();
 };
+
+// ---------- Статистика по местам (Pro) ----------
+const loadHands = () => { try { return JSON.parse(localStorage.getItem('poker-hands')) || []; } catch { return []; } };
+function recordHand() {
+  const pos = seatPosition(state.occupied, state.button, state.hero);
+  if (!pos || !state.bb) return;
+  const walk = state.resultKind === 'win' && boardCount() < 3 && state.preflop === 'none' && pos.key === 'BB';
+  const entry = handEntry({ time: Date.now(), posKey: pos.key, kind: state.resultKind, amount: state.result, bb: state.bb,
+    posted: heroPosted(), walk, hand: handClass(state.hole[0], state.hole[1]) });
+  try { localStorage.setItem('poker-hands', JSON.stringify(addHand(loadHands(), entry))); } catch { /* приватный режим */ }
+}
+let statsPeriod = 'day';
+const signedBB = (n) => (n > 0 ? `+${String(n).replace('.', ',')}` : n < 0 ? `−${String(-n).replace('.', ',')}` : '0') + ' ББ';
+const handsWord = (n) => (n % 10 === 1 && n % 100 !== 11 ? 'раздача' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'раздачи' : 'раздач');
+function openStats() {
+  if (!isPro()) return openPro();
+  const { total, rows } = summarize(loadHands(), statsPeriod);
+  const periods = [['day', 'Сегодня'], ['month', 'Месяц'], ['all', 'Всё время']];
+  const cls = (n) => (n > 0 ? 'plus' : n < 0 ? 'minus' : '');
+  const body = !total.hands
+    ? `<p class="stats-empty">${statsPeriod === 'all' ? 'Пока пусто.' : 'За это время раздач нет.'} После раздачи нажми «Новая раздача» и отметь,
+        чем она кончилась, — статистика соберётся сама.</p>`
+    : `<p class="stats-total">${total.hands} ${handsWord(total.hands)}, вошёл в ${total.entered}, выиграл ${total.won}.
+        Итог: <b class="${cls(total.net)}">${signedBB(total.net)}</b></p>
+      <table class="stats-table">
+        <thead><tr><th>Место</th><th>Раздач</th><th>Вошёл</th><th>Выиграл</th><th>Итог</th></tr></thead>
+        <tbody>${rows.map((r) => `<tr class="${r.hands ? '' : 'none'}"><td>${r.label}</td><td>${r.hands}</td><td>${r.entered}</td><td>${r.won}</td>
+          <td class="${cls(r.net)}">${r.hands ? signedBB(r.net) : '—'}</td></tr>`).join('')}</tbody>
+      </table>
+      <p class="note">«Вошёл» — сам положил фишки сверх блайнда: уравнял или повысил. «Выиграл» — из этих раздач.
+        Итог — в больших блайндах, чтобы разные уровни можно было сложить. Считаются раздачи, где ты отметил, чем они кончились.</p>`;
+  openSheet(`
+    <h2>Моя статистика<button data-act="close">Закрыть</button></h2>
+    <div class="segments">${periods.map(([k, t]) => `<button data-period="${k}" aria-pressed="${statsPeriod === k}">${t}</button>`).join('')}</div>
+    ${body}`);
+  sheet.querySelector('[data-act="close"]').onclick = closeSheet;
+  for (const b of sheet.querySelectorAll('[data-period]')) b.onclick = () => { statsPeriod = b.dataset.period; openStats(); };
+}
 
 function startNewHand() {
   state.button = nextActive(state.occupied, state.button); // кнопка уходит к следующему игроку
@@ -868,6 +908,7 @@ function openSettings() {
   openSheet(`
     <h2>Блайнды и стек<button data-act="close">Готово</button></h2>
     ${proRow()}
+    <button class="${isPro() ? 'stats-row' : 'locked-row'}" data-act="stats">Моя статистика ${isPro() ? '<b>›</b>' : '<span>PRO</span>'}</button>
     <div class="steppers">
       ${stepper('bb', 'Большой блайнд', 1, 1)}
       ${stepper('stack', 'Твой стек', state.bb * 10)}
@@ -891,6 +932,7 @@ function openSettings() {
     levels.onchange = (e) => { state.levels = parseLevels(e.target.value); persist(); render(); };
   }
   for (const b of sheet.querySelectorAll('[data-act="pro"]')) b.onclick = openPro;
+  sheet.querySelector('[data-act="stats"]').onclick = openStats;
   for (const b of sheet.querySelectorAll('[data-ante]')) b.onclick = () => {
     state.anteOn = b.dataset.ante === 'true'; persist(); openSettings(); render();
   };

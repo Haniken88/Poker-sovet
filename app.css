@@ -297,3 +297,18 @@ body.training main, body.training .stakes-row, body.training #ticket, body.train
 .tr-explain h3 { font: 400 16px Prata; color: var(--ink); margin-bottom: 4px; }
 .tr-explain p { font-size: 13px; line-height: 1.5; color: #4a4030; margin-top: 6px; }
 .tr-explain b { color: var(--ink); }
+/* Статистика по местам (2026-10-16, Pro) */
+.stats-row { display: flex; align-items: center; width: 100%; text-align: left; padding: 12px 14px; margin-bottom: 12px; border-radius: 12px;
+  background: var(--panel); border: 1px solid var(--panel-line); color: var(--text); font: 700 14px Manrope; }
+.stats-row b { margin-left: auto; color: var(--gold); font-size: 18px; }
+.stats-total { margin: 16px 2px 12px; font-size: 14.5px; line-height: 1.5; color: var(--text); font-variant-numeric: tabular-nums; }
+.stats-total b { font-size: 16px; }
+.stats-empty { margin: 18px 2px 4px; font-size: 14px; line-height: 1.5; color: var(--muted); }
+.stats-table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums;
+  background: var(--panel); border: 1px solid var(--panel-line); border-radius: 14px; overflow: hidden; border-style: hidden; box-shadow: 0 0 0 1px var(--panel-line); }
+.stats-table th { font: 700 11px Manrope; color: var(--muted); text-align: right; padding: 11px 8px 7px; }
+.stats-table td { padding: 10px 8px; text-align: right; border-top: 1px solid var(--panel-line); white-space: nowrap; }
+.stats-table th:first-child, .stats-table td:first-child { text-align: left; padding-left: 14px; }
+.stats-table th:last-child, .stats-table td:last-child { padding-right: 14px; }
+.stats-table tr.none td { color: var(--muted); opacity: .6; }
+.plus { color: #7fd6a2; font-weight: 700; } .minus { color: #ff8a8f; font-weight: 700; }

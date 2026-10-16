@@ -1,10 +1,10 @@
 // Офлайн-режим: сначала пробуем интернет (всегда свежая версия),
 // без связи — берём сохранённую копию из телефона.
-const CACHE = 'poker-v44';
+const CACHE = 'poker-v45';
 const FILES = [
   './', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest',
   'src/cards.js', 'src/evaluator.js', 'src/equity.js', 'src/hands.js', 'src/handRanks.js',
-  'src/positions.js', 'src/preflop.js', 'src/postflop.js', 'src/table.js', 'src/ranges.js', 'src/preflopData.js', 'src/openTables.js', 'src/nicknames.js', 'src/nashHU.js', 'src/nashHUAnte.js', 'src/huCall.js', 'src/pot.js', 'src/nashRing.js', 'src/pro.js', 'src/blinds.js', 'src/trainer.js', 'src/explain.js', 'trainer-view.js',
+  'src/positions.js', 'src/preflop.js', 'src/postflop.js', 'src/table.js', 'src/ranges.js', 'src/preflopData.js', 'src/openTables.js', 'src/nicknames.js', 'src/nashHU.js', 'src/nashHUAnte.js', 'src/huCall.js', 'src/pot.js', 'src/nashRing.js', 'src/pro.js', 'src/blinds.js', 'src/trainer.js', 'src/explain.js', 'src/stats.js', 'trainer-view.js',
   'fonts/fonts.css', 'fonts/prata-latin.woff2', 'fonts/prata-cyrillic.woff2',
   'fonts/manrope-latin.woff2', 'fonts/manrope-cyrillic.woff2',
   'icons/icon-192.png', 'icons/apple-touch-icon.png',
