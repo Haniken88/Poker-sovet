@@ -12,7 +12,7 @@ import { handEntry, addHand, summarize } from './src/stats.js';
 import { GEOMETRY, DEALER_XY, SEAT_XY, SEAT_COUNT, activeSeats, seatPosition, nextActive } from './src/table.js';
 
 // Номер версии — поднимать при каждом обновлении вместе с CACHE в sw.js.
-const APP_VERSION = 46;
+const APP_VERSION = 47;
 const $ = (id) => document.getElementById(id);
 const RANK_LABEL = { 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
 const rankLabel = (r) => RANK_LABEL[r] || String(r);
@@ -822,7 +822,7 @@ function recordHand() {
   if (!pos || !state.bb) return;
   const walk = state.resultKind === 'win' && boardCount() < 3 && state.preflop === 'none' && pos.key === 'BB';
   const entry = handEntry({ time: Date.now(), posKey: pos.key, kind: state.resultKind, amount: state.result, bb: state.bb,
-    posted: heroPosted(), walk, hand: handClass(state.hole[0], state.hole[1]) });
+    posted: heroPosted(), walk, hand: handClass(state.hole[0], state.hole[1]), stackBB: state.stack / state.bb });
   try { localStorage.setItem('poker-hands', JSON.stringify(addHand(loadHands(), entry))); } catch { /* приватный режим */ }
 }
 let statsPeriod = 'day';

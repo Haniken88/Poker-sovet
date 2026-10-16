@@ -19,11 +19,11 @@ const rowOf = (key) => (key.startsWith('UTG') ? 'early' : key === 'LJ' || key ==
  * posKey — место (BTN, SB, BB, CO, HJ, LJ, UTG…), kind — 'win' | 'lose' | 'fold', amount — сколько выиграл/потерял (деньги стола),
  * posted — сколько блайнда ты поставил заранее, walk — все сбросили до тебя на большом блайнде (раздачу ты не играл).
  */
-export function handEntry({ time, posKey, kind, amount, bb, posted = 0, walk = false, hand = null }) {
+export function handEntry({ time, posKey, kind, amount, bb, posted = 0, walk = false, hand = null, stackBB = null }) {
   // «Вошёл» — сам положил в банк больше обязательного блайнда: уравнял, повысил, дошёл до флопа.
   const entered = kind === 'fold' ? amount > posted : !walk;
   const net = (kind === 'win' ? 1 : -1) * amount / bb;
-  return { t: time, k: posKey, r: kind, e: entered, b: Math.round(net * 10) / 10, ...(hand ? { h: hand } : {}) };
+  return { t: time, k: posKey, r: kind, e: entered, b: Math.round(net * 10) / 10, ...(hand ? { h: hand } : {}), ...(stackBB ? { s: Math.round(stackBB) } : {}) };
 }
 
 export function addHand(list, entry) {
